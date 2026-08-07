@@ -1,60 +1,67 @@
-# Word2Vec + semantic taxonomy (Chroma / Pinecone)
+# Word2Vec + MiniLM semantic taxonomy (Chroma / Pinecone)
 
-CodeEvolve builds a **clearer taxonomy** from evolution text and per-repo vector niches.
+CodeEvolve builds a **clearer taxonomy** from evolution text and per-repo vector niches, deepened with a **lightweight open-source embedding model**.
 
-## Pipeline
+## Default taxonomy embedder
 
-1. **Evolution corpus** — each commit → tokens from subject/body + path stems + churn/revert markers  
-2. **Word2Vec** (Gensim when installed; co-occurrence fallback otherwise)  
-   - neighbors for change terms  
-   - clade label suggestions  
-   - early→late term drift  
-3. **Semantic niches** — embed file docs (path + snippet), upsert into a vector store, k-means niches  
-4. **Clade refinement** — relabel structural clades when niche agreement ≥ 0.45
+| Model | Role |
+|-------|------|
+| `sentence-transformers/all-MiniLM-L6-v2` | **Default** — ~80MB, strong local quality/size |
+| `sentence-transformers/paraphrase-MiniLM-L3-v2` | Lighter — set `CODEEVOLVE_EMBED_LIGHT=1` |
 
-## Install
+Override: `CODEEVOLVE_EMBED_MODEL=<hf-id>`.
+
+Taxonomy construction **prefers MiniLM automatically** (batch encode). Falls back to hashing-trick vectors when deps/env skip embeds.
 
 ```powershell
-pip install -e ".[semantic]"          # gensim + chromadb
-# optional cloud index:
-pip install -e ".[pinecone]"
+pip install -e ".[semantic]"          # MiniLM + gensim + chromadb
+python -m codeevolve hardware --ensure-embed
 ```
 
-## Backends
+| Env | Effect |
+|-----|--------|
+| `CODEEVOLVE_SKIP_EMBED=1` | Force hash fallback |
+| `CODEEVOLVE_SKIP_HF=1` | Also skips MiniLM unless `CODEEVOLVE_FORCE_EMBED=1` |
+| `CODEEVOLVE_EMBED_NO_DOWNLOAD=1` | Don’t fetch weights |
+| `CODEEVOLVE_EMBED_LIGHT=1` | Use MiniLM-L3 |
+
+## Pipeline (deepened)
+
+1. **Evolution corpus** → Word2Vec neighbors / drift / clade hints  
+2. **MiniLM file docs** — path + symbols + comment tokens (batch encoded)  
+3. **Hybrid niches** — k-means seeded from structural clade centroids  
+4. **Soft confidence** — assignment margin per file  
+5. **Label ranking** — candidate niche phrases re-embedded and scored vs centroid  
+6. **Vector store** — memory / Chroma / Pinecone per-repo namespace  
+7. **Clade refinement** — relabel when niche agreement + embed confidence are high  
+
+## Install / backends
+
+```powershell
+pip install -e ".[semantic]"          # embed + gensim + chromadb
+pip install -e ".[pinecone]"          # optional cloud index
+```
 
 | Backend | When |
 |---------|------|
-| `memory` | Always available (tests / no deps) |
-| `chromadb` | `pip install -e ".[chroma]"` or `CODEEVOLVE_USE_CHROMA=1` |
-| `pinecone` | `PINECONE_API_KEY` + pre-created index (`CODEEVOLVE_PINECONE_INDEX`, cosine) |
+| `memory` | Always available |
+| `chromadb` | installed or `CODEEVOLVE_USE_CHROMA=1` |
+| `pinecone` | `PINECONE_API_KEY` + index |
 
 ```powershell
-# auto: pinecone (if keyed) → chroma (if installed) → memory
 python -m codeevolve --repo . analyze --vector-backend auto
-
-$env:CODEEVOLVE_USE_CHROMA="1"
-python -m codeevolve --repo . semantic-taxonomy
-
-$env:PINECONE_API_KEY="..."
-$env:CODEEVOLVE_PINECONE_INDEX="codeevolve"
-python -m codeevolve --repo . analyze --vector-backend pinecone
-```
-
-Chroma persistence default: `~/.codeevolve/chroma` (`CODEEVOLVE_CHROMA_DIR`).
-
-Skip gensim (force fallback): `CODEEVOLVE_SKIP_GENSIM=1`.
-
-## CLI
-
-```powershell
 python -m codeevolve --repo . word2vec
 python -m codeevolve --repo . semantic-taxonomy
-python -m codeevolve --repo . taxonomy   # includes word2vec + semantic blocks
 python -m codeevolve --repo . analyze --no-semantic
 ```
 
+Chroma dir: `~/.codeevolve/chroma` (`CODEEVOLVE_CHROMA_DIR`).  
+Skip gensim: `CODEEVOLVE_SKIP_GENSIM=1`.
+
 ## Report fields
 
-- `taxonomy.word2vec` — engine, neighbors, drift, clade_labels  
-- `taxonomy.semantic` — backend, namespace, niches, clade_refinements  
-- Clade `label` may be rewritten from Word2Vec/niche suggestions
+- `taxonomy.semantic.embedder` — model id, engine (`sentence_transformers` \| `hash_fallback`), dim  
+- `taxonomy.semantic.niches[].mean_confidence` / `cohesion`  
+- `taxonomy.semantic.path_confidence`  
+- `taxonomy.word2vec` — neighbors, drift, clade_labels  
+- Clade `label` / `role` may be rewritten from MiniLM niche + Word2Vec blend

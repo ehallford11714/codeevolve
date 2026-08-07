@@ -95,9 +95,10 @@ def main(argv: list[str] | None = None) -> int:
             sp.add_argument("--llm", nargs="?", const="auto", default=None)
             sp.add_argument("--md-out", default=None)
 
-    hw = sub.add_parser("hardware", help="Hardware + SLM probe")
+    hw = sub.add_parser("hardware", help="Hardware + SLM / taxonomy-embedder probe")
     hw.add_argument("--ensure-hf", action="store_true")
     hw.add_argument("--ensure-slm", action="store_true")
+    hw.add_argument("--ensure-embed", action="store_true", help="Ensure MiniLM taxonomy embedder")
 
     ci = sub.add_parser("ci", help="CI gate against report JSON")
     ci.add_argument("--report", required=True, help="Current report.json")
@@ -159,6 +160,14 @@ def main(argv: list[str] | None = None) -> int:
             payload["hf_qwen"] = ensure_hf_qwen(profile.recommended_model)
         if args.ensure_slm:
             payload["slm"] = ensure_default_slm()
+        if args.ensure_embed:
+            from codeevolve.models.taxonomy_embed import ensure_taxonomy_embedder
+
+            payload["taxonomy_embedder"] = ensure_taxonomy_embedder(download=True).to_dict()
+        else:
+            from codeevolve.models.taxonomy_embed import ensure_taxonomy_embedder
+
+            payload["taxonomy_embedder"] = ensure_taxonomy_embedder(download=False).to_dict()
         _print(payload)
         return 0
 

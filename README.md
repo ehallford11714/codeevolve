@@ -88,7 +88,7 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 - [Metrics](docs/METRICS.md)
 - [Cloud / HF Qwen](docs/CLOUD.md)
 
-**0.8** adds **Word2Vec over evolution** + **semantic taxonomy** (ChromaDB / Pinecone / memory) to clarify clade labels per codebase — see [docs/SEMANTIC.md](docs/SEMANTIC.md). **0.7** hypothesis panels + `evaluate`; earlier SLM/CI/coupling remain.
+**0.9** deepens taxonomy with a default **lightweight open-source MiniLM embedder** (batch niches, hybrid clade seeding, soft confidence) plus Word2Vec / Chroma / Pinecone — see [docs/SEMANTIC.md](docs/SEMANTIC.md). **0.7–0.8** evaluate + vector taxonomy; earlier SLM/CI/coupling remain.
 
 ```powershell
 # Diff + dashboard + PR comment + CI gate
@@ -99,7 +99,8 @@ python -m codeevolve --repo . dependencies
 python -m codeevolve --repo . offboarding
 python -m codeevolve --repo . word2vec
 python -m codeevolve --repo . semantic-taxonomy
-# pip install -e ".[semantic]"  # gensim + chromadb
+# pip install -e ".[semantic]"  # MiniLM + gensim + chromadb
+python -m codeevolve hardware --ensure-embed
 python -m codeevolve evaluate --md-out eval.md
 python -m codeevolve comment --report report.json --out pr.md
 python -m codeevolve ci --report report.json --previous report.prev.json

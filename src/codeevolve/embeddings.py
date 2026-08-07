@@ -1,4 +1,4 @@
-"""Embedding helpers — hash vectors by default; optional sentence-transformers."""
+"""Embedding helpers — hash vectors; taxonomy prefers lightweight MiniLM."""
 
 from __future__ import annotations
 
@@ -22,13 +22,27 @@ def _use_sentence_transformers() -> bool:
     return os.environ.get("CODEEVOLVE_USE_ST_EMBED", "").lower() in {"1", "true", "yes"}
 
 
-def embed_text(text: str, *, dim: int = 64) -> list[float]:
-    """Embed text. Hashing-trick by default; sentence-transformers when enabled."""
+def embed_text(text: str, *, dim: int = 64, for_taxonomy: bool = False) -> list[float]:
+    """Embed text. Taxonomy path prefers MiniLM; else optional ST / hash."""
+    if for_taxonomy:
+        from codeevolve.models.taxonomy_embed import embed_taxonomy_texts
+
+        vecs, _ = embed_taxonomy_texts([text or ""], dim=dim)
+        return vecs[0] if vecs else _hash_embed(text, dim=dim)
     if _use_sentence_transformers():
         vec = _st_embed(text)
         if vec is not None:
             return vec
     return _hash_embed(text, dim=dim)
+
+
+def embed_texts(texts: Sequence[str], *, dim: int = 64, for_taxonomy: bool = False) -> list[list[float]]:
+    if for_taxonomy:
+        from codeevolve.models.taxonomy_embed import embed_taxonomy_texts
+
+        vecs, _ = embed_taxonomy_texts(texts, dim=dim)
+        return vecs
+    return [embed_text(t, dim=dim) for t in texts]
 
 
 def _hash_embed(text: str, *, dim: int = 64) -> list[float]:
@@ -65,18 +79,17 @@ def cosine(a: Sequence[float], b: Sequence[float]) -> float:
     return float(sum(x * y for x, y in zip(a, b)))
 
 
-def mean_embed(texts: Iterable[str], *, dim: int = 64) -> list[float]:
-    acc: list[float] | None = None
-    n = 0
-    for t in texts:
-        v = embed_text(t, dim=dim)
-        if acc is None:
-            acc = [0.0] * len(v)
-        if len(acc) != len(v):
-            v = _hash_embed(t, dim=len(acc))
+def mean_embed(texts: Iterable[str], *, dim: int = 64, for_taxonomy: bool = False) -> list[float]:
+    items = list(texts)
+    if not items:
+        return [0.0] * dim
+    if for_taxonomy:
+        vecs = embed_texts(items, dim=dim, for_taxonomy=True)
+    else:
+        vecs = [embed_text(t, dim=dim) for t in items]
+    acc = [0.0] * len(vecs[0])
+    for v in vecs:
         for i, x in enumerate(v):
             acc[i] += x
-        n += 1
-    if not n or acc is None:
-        return [0.0] * dim
+    n = float(len(vecs))
     return [x / n for x in acc]

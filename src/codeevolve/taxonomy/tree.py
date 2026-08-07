@@ -153,10 +153,10 @@ def _cochange_clusters(commits: list[CommitRecord], paths: list[str], max_clades
     for d in dir_keys:
         if len(clade_dirs) >= max_clades:
             # attach to most similar existing
-            emb = embed_text(d + " " + " ".join(by_dir[d][:20]))
+            emb = embed_text(d + " " + " ".join(by_dir[d][:20]), for_taxonomy=True)
             best, best_s = clade_dirs[0], -1.0
             for cd in clade_dirs:
-                s = cosine(emb, embed_text(cd + " " + " ".join(by_dir[cd][:20])))
+                s = cosine(emb, embed_text(cd + " " + " ".join(by_dir[cd][:20]), for_taxonomy=True))
                 if s > best_s:
                     best, best_s = cd, s
             for p in by_dir[d]:

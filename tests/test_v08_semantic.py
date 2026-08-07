@@ -10,6 +10,7 @@ from codeevolve.taxonomy.word2vec import analyze_word2vec, build_evolution_corpu
 
 def test_evolution_corpus_and_word2vec(sample_repo, monkeypatch):
     monkeypatch.setenv("CODEEVOLVE_SKIP_GENSIM", "1")
+    monkeypatch.setenv("CODEEVOLVE_SKIP_EMBED", "1")
     commits = CodeEvolve(sample_repo).commits()
     corpus = build_evolution_corpus(commits)
     assert corpus
@@ -47,6 +48,7 @@ def test_open_vector_store_defaults_memory(monkeypatch):
 
 def test_semantic_taxonomy_builds(sample_repo, monkeypatch):
     monkeypatch.setenv("CODEEVOLVE_SKIP_GENSIM", "1")
+    monkeypatch.setenv("CODEEVOLVE_SKIP_EMBED", "1")
     monkeypatch.setenv("CODEEVOLVE_VECTOR_BACKEND", "memory")
     ce = CodeEvolve(sample_repo)
     commits = ce.commits()
@@ -68,6 +70,7 @@ def test_analyze_includes_semantic_blocks(sample_repo, monkeypatch):
     monkeypatch.setenv("CODEEVOLVE_TAXONOMY_HEURISTIC", "1")
     monkeypatch.setenv("CODEEVOLVE_SKIP_HF", "1")
     monkeypatch.setenv("CODEEVOLVE_SKIP_GENSIM", "1")
+    monkeypatch.setenv("CODEEVOLVE_SKIP_EMBED", "1")
     monkeypatch.setenv("CODEEVOLVE_VECTOR_BACKEND", "memory")
     report = CodeEvolve(sample_repo).analyze(
         use_llm=False,

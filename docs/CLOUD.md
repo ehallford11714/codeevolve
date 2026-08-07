@@ -25,11 +25,14 @@ Taxonomy guidance always runs (unless `--no-taxonomy-guide`). **Default path tri
 ```powershell
 pip install -e ".[hf]"                 # real default SLM
 python -m codeevolve hardware --ensure-slm
-# optional sharper embeddings:
-# pip install -e ".[embed]"; $env:CODEEVOLVE_USE_ST_EMBED="1"
+# taxonomy MiniLM (default for semantic niches when installed):
+# pip install -e ".[semantic]"; python -m codeevolve hardware --ensure-embed
 # optional tree-sitter symbols:
 # pip install -e ".[treesitter]"
 ```
+
+See [SEMANTIC.md](SEMANTIC.md) for MiniLM / Chroma / Pinecone taxonomy construction.
+
 
 ## Backend selection
 

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codeevolve"
-version = "0.8.0"
-description = "Code evolution analysis with Word2Vec change semantics, Chroma/Pinecone taxonomy, hypothesis panels, and CI/PR gates."
+version = "0.9.0"
+description = "Code evolution with MiniLM taxonomy embeddings, Word2Vec change semantics, Chroma/Pinecone niches, and CI/PR gates."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
@@ -26,7 +26,7 @@ embed = ["numpy>=1.24", "sentence-transformers>=2.2"]
 gensim = ["gensim>=4.3"]
 chroma = ["chromadb>=0.5"]
 pinecone = ["pinecone>=5.0"]
-semantic = ["codeevolve[gensim,chroma]"]
+semantic = ["codeevolve[embed,gensim,chroma]"]
 hf = ["transformers>=4.40", "torch", "accelerate"]
 treesitter = ["tree_sitter_languages>=1.10"]
 all = ["codeevolve[dev,embed,hf,treesitter,gensim,chroma,pinecone]"]
