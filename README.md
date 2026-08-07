@@ -86,11 +86,15 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 
 ## Docs
 
-- [Tutorial](docs/TUTORIAL.md)
-- [Architecture](docs/ARCHITECTURE.md)
+- [Tutorial](docs/TUTORIAL.md) — end-to-end workflow incl. provenance & dynamics
+- [Architecture](docs/ARCHITECTURE.md) — pipeline and package map
+- [Provenance / deliberation](docs/PROVENANCE.md) — ledger, frames, MCP/schema
+- [Dynamics](docs/DYNAMICS.md) — state trajectory rationale (FEAST-aligned)
+- [Ecology](docs/ECOLOGY.md) — event/changepoint stage calibration
+- [Evaluation](docs/EVAL.md) — synthetic / taxonomy / ecology / dynamics / public
 - [Metrics](docs/METRICS.md)
+- [Hierarchy](docs/HIERARCHY.md) · [RAG](docs/RAG.md) · [Semantic](docs/SEMANTIC.md)
 - [Cloud / HF Qwen](docs/CLOUD.md)
-- [Provenance / deliberation](docs/PROVENANCE.md)
 
 **0.16** adds blast/symbol/CST micro-provenance, deliberation **JSON Schema + MCP tools**, and `evaluate --suite dynamics`. **0.15** state trajectory / selection / diffs. See [docs/PROVENANCE.md](docs/PROVENANCE.md).
 

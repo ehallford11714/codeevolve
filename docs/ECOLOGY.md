@@ -52,3 +52,7 @@ $env:CODEEVOLVE_SKIP_GHSA = "1"
 3. Full calibration on a fixture repo  
 
 Still hypotheses — success means detectors fire and anchors attach, not that a repo is “mature.”
+
+## Downstream: dynamics & provenance
+
+Calibrated events and segments feed the **dynamics** layer as impulse triggers and basin intervals (`report.dynamics`), then become ledger records and frames (`frame:response:*`, `frame:basin`). See [DYNAMICS.md](DYNAMICS.md) and [PROVENANCE.md](PROVENANCE.md).

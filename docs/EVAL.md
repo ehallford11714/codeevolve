@@ -1,6 +1,6 @@
 # Evaluation & rigor
 
-CodeEvolve treats evolutionary “laws” and ecological stages as **hypotheses**, not grades.
+CodeEvolve treats evolutionary “laws” and ecological stages as **hypotheses**, not grades. Eval suites prove detectors and deliberation substrates fire on planted or public evidence — not that a repo is “good.”
 
 ## Layers
 
@@ -9,7 +9,19 @@ CodeEvolve treats evolutionary “laws” and ecological stages as **hypotheses*
 3. **Synthetic fixtures** — planted ground truth (detection agreement)  
 4. **Taxonomy gold + RAG** — path→type_path prefixes + RAG index/typed clades/engine meta  
 5. **Ecology calibration** — PELT changepoints + lifecycle events (see [ECOLOGY.md](ECOLOGY.md))  
-6. **Public-repo scorecard** — real GitHub tags; smoke + before/after directional checks  
+6. **Dynamics + provenance** — trajectory, impulses/basins, micro kinds, pack schema (see [DYNAMICS.md](DYNAMICS.md), [PROVENANCE.md](PROVENANCE.md))  
+7. **Public-repo scorecard** — real GitHub tags; smoke + before/after directional checks  
+
+### Why each layer
+
+| Layer | Rationale |
+|-------|-----------|
+| Hypotheses / confidence | Keep claims graded; avoid fake precision |
+| Synthetic | Fast CI: detectors see planted patterns |
+| Taxonomy gold | Credibility for type hierarchy + RAG path |
+| Ecology | Stages must move with events/CPs, not churn cutoffs alone |
+| Dynamics | Trajectory + pack schema are the deliberation contract |
+| Public scorecard | Tool survives real tags without claiming absolute truth |
 
 ## Run evaluation
 
@@ -18,36 +30,21 @@ $env:CODEEVOLVE_SKIP_HF="1"
 $env:CODEEVOLVE_TAXONOMY_HEURISTIC="1"
 $env:CODEEVOLVE_SKIP_EMBED="1"
 
-# Default: synthetic + taxonomy gold + public
+# Default: synthetic + taxonomy + ecology + dynamics + public
 python -m codeevolve evaluate --md-out eval.md --out eval.json
 
-# Fixtures only (CI-friendly)
 python -m codeevolve evaluate --suite synthetic
-
-# Taxonomy type gold + RAG pipeline
 python -m codeevolve evaluate --suite taxonomy
-
-# Ecology changepoints + lifecycle calibration
 $env:CODEEVOLVE_SKIP_GHSA = "1"
 python -m codeevolve evaluate --suite ecology
-
-# Require real SLM+RAG engine
-$env:CODEEVOLVE_LIVE_SLM = "1"
-python -m codeevolve evaluate --suite taxonomy
-
-# Public scorecard (clones into ~/.codeevolve/repos)
+python -m codeevolve evaluate --suite dynamics
 python -m codeevolve evaluate --suite public --md-out public.md
-
-# Offline: only cached clones; missing repos are skipped (not failed)
 python -m codeevolve evaluate --suite all --offline
-
-# Live single case
-python -m codeevolve evaluate --suite public --public-case click_smoke_8.4.0
 ```
 
-Exit code `0` when synthetic ≥ 0.70 (if run), taxonomy ≥ 0.70 (if run), public ≥ 0.55 (if any public cases ran), and combined ≥ 0.55.
+Exit code `0` when present suites meet floors: synthetic ≥ 0.70, taxonomy ≥ 0.70, ecology ≥ 0.70, **dynamics ≥ 0.70**, public ≥ 0.55 (if any public cases ran), and combined ≥ 0.55.
 
-Combined overall when all three run: **0.40·taxonomy + 0.35·public + 0.25·synthetic**.
+Combined overall when suites run: **0.25·taxonomy + 0.25·ecology + 0.20·dynamics + 0.20·public + 0.10·synthetic** (missing suites dropped and weights renormalized).
 
 ### Synthetic fixtures
 
@@ -63,8 +60,26 @@ Combined overall when all three run: **0.40·taxonomy + 0.35·public + 0.25·syn
 
 | Case | What it proves |
 |------|----------------|
-| `taxonomy_type_gold` | Path → type_path prefix agreement on curated paths (≥75% required in tests) |
-| `taxonomy_rag_pipeline` | Chunk index, typed clades, guidance RAG meta; with `CODEEVOLVE_LIVE_SLM=1` requires `hf-slm-rag` |
+| `taxonomy_type_gold` | Path → type_path prefix agreement on curated paths |
+| `taxonomy_rag_pipeline` | Chunk index, typed clades, guidance RAG meta; `CODEEVOLVE_LIVE_SLM=1` requires `hf-slm-rag` |
+
+### Ecology calibration
+
+See [ECOLOGY.md](ECOLOGY.md). Planted regimes → changepoints; event hints; fixture calibration.
+
+### Dynamics + deliberation provenance
+
+**Rationale:** without an eval suite, trajectory/pack/schema drift silently breaks agents.
+
+| Case | What it proves |
+|------|----------------|
+| `dynamics_state_trajectory` | Enough monthly samples; z-scored coordinates present |
+| `dynamics_impulse_basins` | Impulse responses + basins on planted events/segments |
+| `dynamics_ledger_schema` | Ledger has state/blast/symbol/CST kinds; pack validates JSON Schema; risk frame links blast |
+
+```powershell
+python -m codeevolve evaluate --suite dynamics --md-out eval_dynamics.md
+```
 
 ### Public scorecard cases
 
@@ -73,24 +88,15 @@ Combined overall when all three run: **0.40·taxonomy + 0.35·public + 0.25·syn
 | `click_smoke_8.4.0` | pallets/click@8.4.0 | smoke | digest fields + hero ranking |
 | `flask_smoke_3.0.0` | pallets/flask@3.0.0 | smoke | same |
 | `requests_smoke_2.31.0` | psf/requests@v2.31.0 | smoke | same |
-| `click_8.3_to_8.4_release` | 8.3.0→8.4.0 | before/after | stability/risk within tol; heroes+hypotheses remain (feature releases may raise coupling) |
+| `click_8.3_to_8.4_release` | 8.3.0→8.4.0 | before/after | stability/risk within tol; heroes+hypotheses remain |
 | `click_8.4.0_to_8.4.2_patch` | 8.4.0→8.4.2 | before/after | patch stream does not worsen proxies |
 | `flask_2.3_to_3.0_major` | 2.3.3→3.0.0 | before/after | coherent heroes; stability within wider tol |
 
 Each analyze runs **detached at the tag** with `git log <ref>` so hotspots/complexity match that tree.
 
-Optional live pytest: `CODEEVOLVE_LIVE_EVAL=1 pytest -m integration`.
+## Related
 
-## Interpreting scores
-
-- **High synthetic** — detectors fire on planted patterns.  
-- **High public** — tool runs on real tags; before/after moves stay inside calibrated tolerances.  
-- **Skipped public** — offline / clone failure; not a detector failure.  
-- Tolerances matter: majors may churn; we do **not** require debt to always fall after every release.
-
-## Anti-goals
-
-- Do not present stage labels as maturity grades.  
-- Do not treat `support` as proof of a Lehman law.  
-- Do not let SLM prose override numeric ranking.  
-- Do not treat synthetic 96% as proof of real-world validity without the public scorecard.
+- [PROVENANCE.md](PROVENANCE.md)
+- [DYNAMICS.md](DYNAMICS.md)
+- [ECOLOGY.md](ECOLOGY.md)
+- [TUTORIAL.md](TUTORIAL.md)
