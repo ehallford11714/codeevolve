@@ -15,3 +15,6 @@ out/
 report.json
 trend.md
 .tmp_*
+.codeevolve/
+repo_report.md
+refactor_plan.md

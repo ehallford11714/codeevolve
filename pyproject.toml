@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codeevolve"
-version = "0.1.0"
-description = "Evaluate code evolution from git history: revert rate, semantic trends, taxonomy, stability, dependencies, debt, phylogeny, and planner-written trend reports."
+version = "0.2.0"
+description = "Evaluate code evolution from git history: taxonomy, phylogeny, debt, weaknesses, drafted reports, and evidence-linked refactor plans."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 authors = [{ name = "ehallford11714" }]
-keywords = ["git", "code-evolution", "technical-debt", "stability", "phylogeny", "embeddings"]
+keywords = ["git", "code-evolution", "technical-debt", "stability", "phylogeny", "embeddings", "refactor"]
 classifiers = [
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
@@ -23,9 +23,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "build", "twine"]
 embed = ["numpy>=1.24"]
-slm = []
-openai = []
-all = ["codeevolve[dev,embed]"]
+hf = ["transformers>=4.40", "torch", "accelerate"]
+cloud = []
+all = ["codeevolve[dev,embed,hf]"]
 
 [project.scripts]
 codeevolve = "codeevolve.cli:main"

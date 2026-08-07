@@ -1,4 +1,4 @@
-"""Analyze a repository (defaults to this repo's parent git root or CWD)."""
+"""Analyze a repository (local path or GitHub URL)."""
 
 from __future__ import annotations
 
@@ -14,17 +14,20 @@ from codeevolve import CodeEvolve
 def main() -> int:
     repo = sys.argv[1] if len(sys.argv) > 1 else str(Path.cwd())
     report = CodeEvolve(repo).analyze(max_commits=300, use_llm=False)
-    print(report.trend.markdown if report.trend else report.to_json())
-    print("\n# JSON summary")
+    if report.repo_report:
+        print(report.repo_report.markdown)
+    if report.refactor_plan:
+        print("\n---\n")
+        print(report.refactor_plan.markdown)
     print(
         {
             "stability": report.metrics.code_stability,
             "revert_rate": report.metrics.revert_rate,
-            "dependency_rate": report.metrics.dependency_rate,
-            "momentum": report.metrics.momentum,
-            "stage": report.phylogeny.current_stage,
+            "stage": report.ecology.global_stage,
             "debt": report.debt.score,
-            "themes": report.semantics.theme_distribution,
+            "failures": len(report.risk.failure_points),
+            "refactor_steps": len(report.refactor_plan.steps) if report.refactor_plan else 0,
+            "clades": len(report.taxonomy.clades),
         }
     )
     return 0

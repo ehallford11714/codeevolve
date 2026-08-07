@@ -1,11 +1,14 @@
 # CodeEvolve
 
-**Evaluate how a codebase evolves** by reading git history — then quantify revert rate, semantic trends, hierarchy taxonomy (embeddings), code stability, dependency churn, technical debt, phylogeny / ecological stage, and a top-down planner report (heuristic SLM or cloud LLM).
+**Evaluate how a codebase evolves** from git history — taxonomy & phylogeny, Lehman/ecological signals, technical debt, ranked failure points, a drafted repository report, and an evidence-linked refactor plan.
 
 ```
-git history → metrics + semantics + phylogeny + debt
-           → top-down plan
-           → global trend report (heuristic | OpenAI-compatible)
+GitHub URL | local path
+    → taxonomy + clade allocation
+    → genetics (lineage, gene flow) + ecology (stages, Lehman proxies)
+    → metrics + debt + weaknesses
+    → repo report + refactor plan
+    → narrative (heuristic | HF Qwen | cloud)
 ```
 
 ## Install
@@ -16,54 +19,67 @@ cd codeevolve
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
+# optional local Qwen:
+# pip install -e ".[hf]"
 ```
 
 ## Quick start
 
 ```powershell
-python -m codeevolve --repo path\to\repo analyze
-python -m codeevolve --repo path\to\repo analyze --out report.json --md-out trend.md
-python -m codeevolve --repo path\to\repo metrics
-python -m codeevolve --repo path\to\repo debt
-python -m codeevolve --repo path\to\repo phylogeny
-python -m codeevolve --repo path\to\repo semantics
+python -m codeevolve --repo path\to\repo analyze --out report.json --report-out repo_report.md --refactor-out refactor_plan.md
+
+# GitHub URL or owner/repo (cloned under ~/.codeevolve/repos)
+python -m codeevolve --repo https://github.com/org/repo analyze --max-commits 300
+
+python -m codeevolve --repo org/repo taxonomy
+python -m codeevolve --repo org/repo risk
+python -m codeevolve --repo org/repo report --md-out repo_report.md
+python -m codeevolve --repo org/repo refactor --md-out refactor_plan.md
+python -m codeevolve hardware
 ```
 
 ```python
 from codeevolve import CodeEvolve
 
-report = CodeEvolve("path/to/repo").analyze()
-print(report.metrics.revert_rate, report.phylogeny.current_stage)
-print(report.trend.markdown)
+report = CodeEvolve("https://github.com/org/repo").analyze()
+print(report.ecology.global_stage, report.debt.score)
+print(report.risk.failure_points[0].title)
+print(report.refactor_plan.markdown)
 ```
 
-Cloud / SLM narrative (optional):
+### LLM backends (optional)
 
 ```powershell
-$env:CODEEVOLVE_LLM_API_KEY = "..."
-python -m codeevolve --repo . analyze --llm
+python -m codeevolve --repo . analyze --llm auto
+# or: --llm hf-qwen | openai | anthropic | heuristic
+
+$env:CODEEVOLVE_LLM_API_KEY = "..."          # OpenAI-compatible
+$env:OPENAI_API_KEY = "..."
+$env:ANTHROPIC_API_KEY = "..."
+$env:CODEEVOLVE_HF_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
+$env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 ```
 
-## What it tracks (MVP)
+`hardware` / `--llm auto` picks local Qwen vs cloud vs heuristic from RAM/VRAM/disk (iQueue-style ladder).
+
+## What it tracks
 
 | Signal | Meaning |
 |--------|---------|
-| **Revert rate** | Share of commits that are reverts |
-| **Semantic trends** | Theme mix (feature/fix/refactor/…) via embeddings |
-| **Hierarchy taxonomy** | Path-layer tree (core/tests/docs/…) + embedding clusters |
-| **Code stability** | Inverse of churn, reverts, hotspot concentration |
-| **Dependency rate** | Share of commits touching lockfiles / manifests |
-| **Momentum** | Recent vs older churn |
-| **Improvement trend** | Recent reverts/churn cooling vs past |
-| **Tech debt** | Deprecation / FIXME scans + historical architecture smells |
-| **Phylogeny** | Commit parent graph, generations, branch factor |
-| **Ecological stage** | pioneer → growth → disturbance → consolidation → maturity → decline |
+| **Taxonomy / clades** | Path layers + co-change clusters; every delta allocated to a clade |
+| **Genetics** | File lineage, fitness, gene flow, HGT suspects |
+| **Ecology** | Global + per-clade stages; Lehman law proxies |
+| **Revert / stability / deps / momentum** | Core change-rate metrics |
+| **Debt** | Deprecations, TODOs, historical architecture smells |
+| **Weaknesses** | Ranked failure points (hotspot blast, reverts, bus factor, test gap, …) |
+| **Repo report** | Drafted markdown brief of evolutionary state |
+| **Refactor plan** | Stabilize → contain → pay down → evolve (evidence-linked) |
 
 ## Docs
 
-- [Tutorial](docs/TUTORIAL.md) — install, CLI walkthrough, reading signals, LLM report
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- [docs/METRICS.md](docs/METRICS.md)
+- [Tutorial](docs/TUTORIAL.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Metrics](docs/METRICS.md)
 
 ## License
 
