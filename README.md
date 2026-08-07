@@ -26,12 +26,18 @@ pip install -e ".[dev]"
 ## Quick start
 
 ```powershell
+# Default: SLM-guided taxonomy (tier=slm)
 python -m codeevolve --repo path\to\repo analyze --out report.json --report-out repo_report.md --refactor-out refactor_plan.md
+
+# Swap up for sharper evolutionary studies
+python -m codeevolve --model-tier large --repo path\to\repo analyze
+python -m codeevolve tiers
 
 # GitHub URL or owner/repo (cloned under ~/.codeevolve/repos)
 python -m codeevolve --repo https://github.com/org/repo analyze --max-commits 300
 
 python -m codeevolve --repo org/repo taxonomy
+python -m codeevolve --repo org/repo fatigue
 python -m codeevolve --repo org/repo risk
 python -m codeevolve --repo org/repo report --md-out repo_report.md
 python -m codeevolve --repo org/repo refactor --md-out refactor_plan.md
@@ -82,7 +88,7 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 - [Metrics](docs/METRICS.md)
 - [Cloud / HF Qwen](docs/CLOUD.md)
 
-Phase E adds **symbol phylogeny** (`symbols`) and **GitHub Issues/PR selection pressure** (`selection`; set `GITHUB_TOKEN` for reliable API access).
+**0.4** defaults taxonomy guidance to an **SLM tier** (`--model-tier slm|standard|large|frontier`), and adds fatigue / cognitive-load / drift / stability-v2 into reports. See [docs/CLOUD.md](docs/CLOUD.md).
 
 ## License
 

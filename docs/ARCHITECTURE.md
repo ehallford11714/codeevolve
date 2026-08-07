@@ -29,7 +29,9 @@ CLI / CodeEvolve(repo|github-url)
 | `ecology/` | Stages, niches, Lehman proxies |
 | `risk/` | Failure points + blast radius |
 | `refactor/` | Phased plan + effort heuristics |
-| `models/` | Hardware ladder, HF ensure, cloud backends |
+| `models/` | Tiers (slm→frontier), SLM taxonomy guide, HF/cloud |
+| `psychology/` | Fatigue / sprint rhythm + cognitive-load proxies |
+| `metrics_stability.py` | Stability v2 decomposition |
 | `report/` | Drafted repo report |
 | `report_trend.py` | Trend planner |
 

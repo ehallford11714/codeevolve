@@ -34,7 +34,12 @@ def _template(ctx: dict[str, Any]) -> str:
     s = ctx.get("semantics") or {}
     sym = ctx.get("symbols") or {}
     sel = ctx.get("selection") or {}
+    fat = ctx.get("fatigue") or {}
+    load = ctx.get("cognitive_load") or {}
+    drift = ctx.get("drift") or {}
+    stab = ctx.get("stability") or {}
     repo = ctx.get("repo", ".")
+    tier = ctx.get("model_tier") or (ctx.get("tier") or {}).get("name") or "slm"
     lehman = e.get("lehman") or {}
     niches = (e.get("niches") or {}).get("overcrowded") or []
     weaknesses = r.get("failure_points") or []
@@ -44,9 +49,13 @@ def _template(ctx: dict[str, Any]) -> str:
     ) or "- None ranked."
     clade_lines = "\n".join(
         f"- `{c.get('id')}` **{c.get('label')}** ({c.get('layer')}): "
-        f"{c.get('file_count')} files, churn={c.get('churn')}"
+        f"{c.get('role') or ''} · {c.get('file_count')} files, churn={c.get('churn')}"
         for c in (t.get("clades") or [])[:10]
     ) or "- No clades."
+    drift_lines = "\n".join(
+        f"- `{d.get('clade_id')}` {d.get('label')}: drift={d.get('drift')}"
+        for d in (drift.get("clade_drift") or [])[:8]
+    ) or "- n/a"
     stage_lines = "\n".join(
         f"- `{c.get('clade_id')}` → **{c.get('stage')}** — {c.get('rationale')}"
         for c in (e.get("clade_stages") or [])[:10]
@@ -60,20 +69,45 @@ def _template(ctx: dict[str, Any]) -> str:
         [
             f"# CodeEvolve Repository Report — `{repo}`",
             "",
+            f"_Model tier: **{tier}** · taxonomy guide: {(t.get('guidance') or {}).get('engine') or (t.get('guidance') or {}).get('model')}_",
+            "",
             "## Executive summary",
             (
                 f"Stage **{e.get('global_stage') or p.get('current_stage')}** "
                 f"({e.get('stage_rationale') or p.get('stage_rationale')}). "
-                f"Stability={m.get('code_stability')}, revert_rate={m.get('revert_rate')}, "
-                f"debt={d.get('score')}, mean_fitness={g.get('mean_fitness')}, "
+                f"Composite stability={stab.get('composite', m.get('code_stability'))}, "
+                f"revert_rate={m.get('revert_rate')}, debt={d.get('score')}, "
+                f"drift={drift.get('global_drift')}, fatigue={fat.get('fatigue_score')}, "
+                f"cognitive_load={load.get('load_index')}, "
                 f"failure_points={r.get('count', len(weaknesses))}."
             ),
             "",
-            "## Taxonomy map",
+            "## Stability decomposition",
+            f"- Structural: {stab.get('structural')}",
+            f"- Behavioral: {stab.get('behavioral')}",
+            f"- Dependency: {stab.get('dependency')}",
+            f"- Test: {stab.get('test')}",
+            f"- Rhythm: {stab.get('rhythm')}",
+            f"- Composite: {stab.get('composite')}",
+            "",
+            "## Taxonomy map (SLM-guided)",
             f"Files indexed: {t.get('file_count')}. Layers: {t.get('layers')}.",
-            f"Languages: {t.get('languages')}.",
+            f"Languages: {t.get('languages')}. Guidance: {t.get('guidance')}.",
             "",
             clade_lines,
+            "",
+            "## Sprint & fatigue trends",
+            fat.get("summary") or "_n/a_",
+            f"After-hours={fat.get('after_hours_rate')}, weekend={fat.get('weekend_rate')}, "
+            f"intensity_creep={fat.get('intensity_creep')}, recovery_ratio={fat.get('recovery_ratio')}.",
+            "",
+            "## Cognitive & ownership load",
+            load.get("summary") or "_n/a_",
+            "",
+            "## Genetic drift",
+            drift.get("summary") or "_n/a_",
+            "",
+            drift_lines,
             "",
             "## Evolutionary history",
             f"Commits={m.get('commit_count')}, churn={m.get('churn_total')}, "
@@ -146,7 +180,11 @@ def _template(ctx: dict[str, Any]) -> str:
 def write_repo_report(context: dict[str, Any], *, llm: str | bool | None = False) -> RepoReportDoc:
     sections = [
         "Executive summary",
-        "Taxonomy map",
+        "Stability decomposition",
+        "Taxonomy map (SLM-guided)",
+        "Sprint & fatigue trends",
+        "Cognitive & ownership load",
+        "Genetic drift",
         "Evolutionary history",
         "Phylogeny & gene flow",
         "Debt & architectural mistakes",

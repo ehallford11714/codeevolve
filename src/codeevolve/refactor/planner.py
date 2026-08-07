@@ -67,7 +67,13 @@ class RefactorPlan:
 
 
 def _wave_for(kind: str) -> str:
-    if kind in {"revert_surface", "dependency_shock", "selection_pressure"}:
+    if kind in {
+        "revert_surface",
+        "dependency_shock",
+        "selection_pressure",
+        "sprint_fatigue",
+        "cognitive_load",
+    }:
         return "stabilize"
     if kind in {"hotspot_blast", "bus_factor", "hotspot_gravity", "circular_risk", "utility_sink"}:
         return "contain"

@@ -13,7 +13,9 @@ def test_embeddings_cosine() -> None:
     assert cosine(a, b) > cosine(a, c)
 
 
-def test_analyze_sample_repo(sample_repo: Path) -> None:
+def test_analyze_sample_repo(sample_repo: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CODEEVOLVE_TAXONOMY_HEURISTIC", "1")
+    monkeypatch.setenv("CODEEVOLVE_SKIP_HF", "1")
     ce = CodeEvolve(sample_repo)
     report = ce.analyze(max_commits=50, write_report=True, use_llm=False)
     assert report.commit_count >= 5
@@ -29,7 +31,9 @@ def test_analyze_sample_repo(sample_repo: Path) -> None:
     assert report.change_timeline
 
 
-def test_cli_analyze(sample_repo: Path, tmp_path: Path) -> None:
+def test_cli_analyze(sample_repo: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CODEEVOLVE_TAXONOMY_HEURISTIC", "1")
+    monkeypatch.setenv("CODEEVOLVE_SKIP_HF", "1")
     from codeevolve.cli import main
 
     out = tmp_path / "report.json"

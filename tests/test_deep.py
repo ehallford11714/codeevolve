@@ -6,7 +6,9 @@ from codeevolve.models.router import resolve_backend_name
 from codeevolve.refactor import build_refactor_plan
 
 
-def test_full_analyze_deep(sample_repo: Path) -> None:
+def test_full_analyze_deep(sample_repo: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CODEEVOLVE_TAXONOMY_HEURISTIC", "1")
+    monkeypatch.setenv("CODEEVOLVE_SKIP_HF", "1")
     report = CodeEvolve(sample_repo).analyze(
         max_commits=50,
         write_report=True,
@@ -28,7 +30,9 @@ def test_full_analyze_deep(sample_repo: Path) -> None:
     assert report.hardware and "recommendation" in report.hardware
 
 
-def test_refactor_evidence_links(sample_repo: Path) -> None:
+def test_refactor_evidence_links(sample_repo: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CODEEVOLVE_TAXONOMY_HEURISTIC", "1")
+    monkeypatch.setenv("CODEEVOLVE_SKIP_HF", "1")
     report = CodeEvolve(sample_repo).analyze(
         max_commits=50,
         write_report=False,
@@ -50,7 +54,9 @@ def test_hardware_and_router() -> None:
     assert resolve_backend_name("openai") == "openai_compatible"
 
 
-def test_cli_report_refactor(sample_repo: Path, tmp_path: Path) -> None:
+def test_cli_report_refactor(sample_repo: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CODEEVOLVE_TAXONOMY_HEURISTIC", "1")
+    monkeypatch.setenv("CODEEVOLVE_SKIP_HF", "1")
     from codeevolve.cli import main
 
     rr = tmp_path / "repo_report.md"

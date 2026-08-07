@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codeevolve"
-version = "0.3.0"
+version = "0.4.0"
 description = "Evaluate code evolution from git history: taxonomy, phylogeny, debt, weaknesses, drafted reports, and evidence-linked refactor plans."
 readme = "README.md"
 license = { text = "MIT" }

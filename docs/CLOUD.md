@@ -1,11 +1,30 @@
-# Cloud & local LLM backends
+# Model tiers, SLM taxonomy guide & cloud backends
 
-CodeEvolve narratives (trend / repo report polish) use a **numeric-first planner**, then optionally an LLM.
+CodeEvolve **defaults to an SLM tier** that always guides taxonomy (clade labels/roles). Swap up for sharper evolutionary studies.
+
+## Model tiers
+
+```powershell
+python -m codeevolve tiers
+python -m codeevolve --model-tier slm --repo . analyze          # default
+python -m codeevolve --model-tier standard --repo . analyze
+python -m codeevolve --model-tier large --repo . analyze
+python -m codeevolve --model-tier frontier --repo . analyze
+python -m codeevolve --model-tier large --model gpt-4o --repo . analyze
+```
+
+| Tier | Local HF (default) | Cloud default | Use for |
+|------|--------------------|---------------|---------|
+| `slm` | Qwen2.5-0.5B | gpt-4o-mini | Taxonomy guide + fast sketches (**default**) |
+| `standard` | Qwen2.5-1.5B | gpt-4o-mini | Sharper clade naming / report polish |
+| `large` | Qwen2.5-7B | gpt-4o | Deeper evolutionary studies |
+| `frontier` | Qwen2.5-14B | gpt-4o / Claude Opus | Highest-fidelity narratives |
+
+Taxonomy guidance always runs (unless `--no-taxonomy-guide`). If HF/cloud is unavailable, a deterministic **`slm_heuristic`** guide still labels niches so taxonomy never skips SLM-style guidance.
 
 ## Backend selection
 
 ```powershell
-python -m codeevolve hardware
 python -m codeevolve hardware --ensure-hf
 python -m codeevolve --repo . analyze --llm auto
 python -m codeevolve --repo . analyze --llm hf-qwen
@@ -14,30 +33,17 @@ python -m codeevolve --repo . analyze --llm anthropic
 python -m codeevolve --repo . analyze --llm heuristic
 ```
 
-| Backend | Requirements |
-|---------|----------------|
-| `heuristic` | None (always works) |
-| `hf-qwen` | `pip install -e ".[hf]"` + enough RAM/VRAM |
-| `openai` / OpenAI-compatible | `CODEEVOLVE_LLM_API_KEY` or `OPENAI_API_KEY` |
-| `anthropic` | `ANTHROPIC_API_KEY` |
-| `auto` | Hardware check → local Qwen if viable, else cloud if keyed, else heuristic |
-
 ## Environment variables
 
 | Variable | Purpose |
 |----------|---------|
-| `CODEEVOLVE_LLM_BACKEND` | Default backend when `--llm` omitted from env-driven paths |
-| `CODEEVOLVE_LLM_API_KEY` / `OPENAI_API_KEY` | Cloud chat completions |
-| `CODEEVOLVE_LLM_BASE_URL` | OpenAI-compatible base (default `https://api.openai.com/v1`) |
-| `CODEEVOLVE_LLM_MODEL` | Cloud model id (default `gpt-4o-mini`) |
-| `ANTHROPIC_API_KEY` | Anthropic Messages API |
-| `CODEEVOLVE_ANTHROPIC_MODEL` | Anthropic model override |
-| `CODEEVOLVE_HF_MODEL` | Force HF model id |
-| `CODEEVOLVE_SKIP_HF` | `1` → never load/download local models |
-| `CODEEVOLVE_HF_DOWNLOAD` | `1` → allow tokenizer prefetch via `ensure_hf_qwen` |
-| `CODEEVOLVE_RAM_GB` | Override detected RAM for tests |
-| `GITHUB_TOKEN` / `GH_TOKEN` | Issues/PR selection-pressure API (higher rate limits) |
-
-## Qwen ladder (hardware)
-
-Same idea as iQueue: pick the largest `Qwen/Qwen2.5-*-Instruct` that fits RAM/VRAM, capped at 1.5B on CPU.
+| `CODEEVOLVE_MODEL_TIER` | `slm` (default) \| `standard` \| `large` \| `frontier` |
+| `CODEEVOLVE_HF_MODEL` | Override local model id |
+| `CODEEVOLVE_LLM_MODEL` | Override cloud chat model |
+| `CODEEVOLVE_LLM_API_KEY` / `OPENAI_API_KEY` | OpenAI-compatible |
+| `CODEEVOLVE_LLM_BASE_URL` | OpenAI-compatible base URL |
+| `ANTHROPIC_API_KEY` | Anthropic |
+| `CODEEVOLVE_SKIP_HF` | `1` → skip local HF (use cloud or slm_heuristic) |
+| `CODEEVOLVE_TAXONOMY_HEURISTIC` | `1` → force deterministic taxonomy guide |
+| `CODEEVOLVE_HF_DOWNLOAD` | `1` → allow tokenizer prefetch |
+| `GITHUB_TOKEN` / `GH_TOKEN` | Issues/PR selection pressure |

@@ -13,7 +13,9 @@ def test_symbols_extracted(sample_repo: Path) -> None:
     assert any("main" in n for n in names)
 
 
-def test_analyze_includes_symbols_and_niches(sample_repo: Path) -> None:
+def test_analyze_includes_symbols_and_niches(sample_repo: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CODEEVOLVE_TAXONOMY_HEURISTIC", "1")
+    monkeypatch.setenv("CODEEVOLVE_SKIP_HF", "1")
     r = CodeEvolve(sample_repo).analyze(
         max_commits=50,
         include_selection=False,
@@ -70,7 +72,9 @@ def test_risk_uses_selection(sample_repo: Path) -> None:
     assert any(p.kind == "selection_pressure" for p in risk.failure_points)
 
 
-def test_cli_symbols(sample_repo: Path) -> None:
+def test_cli_symbols(sample_repo: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CODEEVOLVE_TAXONOMY_HEURISTIC", "1")
+    monkeypatch.setenv("CODEEVOLVE_SKIP_HF", "1")
     from codeevolve.cli import main
 
     assert main(["--repo", str(sample_repo), "symbols"]) == 0

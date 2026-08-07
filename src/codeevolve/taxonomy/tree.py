@@ -63,12 +63,14 @@ class Clade:
     files: list[str] = field(default_factory=list)
     touch_count: int = 0
     churn: int = 0
+    role: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "label": self.label,
             "layer": self.layer,
+            "role": self.role,
             "files": list(self.files)[:80],
             "file_count": len(self.files),
             "touch_count": self.touch_count,
@@ -105,6 +107,7 @@ class TaxonomyReport:
     path_to_clade: dict[str, str]
     allocations: list[AllocatedDelta]
     file_count: int
+    guidance: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -116,6 +119,7 @@ class TaxonomyReport:
             "allocations": [a.to_dict() for a in self.allocations[:500]],
             "allocation_count": len(self.allocations),
             "file_count": self.file_count,
+            "guidance": dict(self.guidance),
         }
 
 
@@ -176,6 +180,9 @@ def build_taxonomy(
     commits: list[CommitRecord],
     *,
     max_files: int = 2000,
+    model_tier: str | None = "slm",
+    model_override: str | None = None,
+    guide: bool = True,
 ) -> TaxonomyReport:
     repo = Path(repo)
     tracked = list_tracked_files(repo)[:max_files]
@@ -245,6 +252,19 @@ def build_taxonomy(
                 )
             )
 
+    guidance_meta: dict[str, Any] = {"tier": model_tier or "slm", "guided": False}
+    if guide:
+        from codeevolve.models.guide import apply_guidance, guide_taxonomy
+
+        # Default: always SLM-guide taxonomy (heuristic SLM if HF/cloud unavailable)
+        g = guide_taxonomy(
+            [c.to_dict() for c in clades],
+            tier=model_tier or "slm",
+            model_override=model_override,
+        )
+        guidance_meta = apply_guidance(clades, g)
+        guidance_meta["guided"] = True
+
     return TaxonomyReport(
         layers=dict(sorted(layers.items(), key=lambda x: -x[1])),
         languages=dict(sorted(langs.items(), key=lambda x: -x[1])),
@@ -253,4 +273,5 @@ def build_taxonomy(
         path_to_clade=path_to_clade,
         allocations=allocations,
         file_count=len(paths),
+        guidance=guidance_meta,
     )

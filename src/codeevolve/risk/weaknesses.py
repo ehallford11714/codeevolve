@@ -12,6 +12,8 @@ from codeevolve.genetics.lineage import GeneticsReport
 from codeevolve.gitlog import CommitRecord
 from codeevolve.ingest.github_api import SelectionPressure
 from codeevolve.metrics import MetricBundle
+from codeevolve.psychology.load import CognitiveLoadReport
+from codeevolve.psychology.rhythm import FatigueReport
 from codeevolve.risk.blast_radius import cochange_degrees
 from codeevolve.taxonomy.tree import TaxonomyReport
 
@@ -61,6 +63,8 @@ def analyze_risk(
     debt: DebtReport,
     *,
     selection: SelectionPressure | None = None,
+    fatigue: FatigueReport | None = None,
+    cognitive_load: CognitiveLoadReport | None = None,
 ) -> RiskReport:
     points: list[FailurePoint] = []
     n = max(1, len(commits))
@@ -175,6 +179,34 @@ def analyze_risk(
                     suggested_intervention="Refactor or isolate; reduce revert triggers",
                 )
             )
+
+    if fatigue and fatigue.fatigue_score >= 0.45:
+        points.append(
+            FailurePoint(
+                id=f"W{len(points)+1}",
+                kind="sprint_fatigue",
+                severity=round(min(1.0, 0.4 + fatigue.fatigue_score), 3),
+                path="(work rhythm)",
+                clade_id="global",
+                title="Elevated sprint fatigue / intensity creep",
+                evidence=[fatigue.to_dict()],
+                suggested_intervention="Schedule recovery week; reduce after-hours and end-of-sprint dumps",
+            )
+        )
+
+    if cognitive_load and cognitive_load.load_index >= 0.5:
+        points.append(
+            FailurePoint(
+                id=f"W{len(points)+1}",
+                kind="cognitive_load",
+                severity=round(min(1.0, 0.35 + cognitive_load.load_index), 3),
+                path="(attention / ownership)",
+                clade_id="global",
+                title="High cognitive-load proxy (switches + ownership stress)",
+                evidence=[cognitive_load.to_dict()],
+                suggested_intervention="Reduce cross-clade commits; spread ownership on hot paths",
+            )
+        )
 
     if selection and selection.pressure_score >= 0.35:
         points.append(
