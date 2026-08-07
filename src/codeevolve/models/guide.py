@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 from codeevolve.models.backends import get_narrative_backend
-from codeevolve.models.router import resolve_backend_name
+from codeevolve.models.slm import slm_enabled, slm_json
 from codeevolve.models.tiers import ModelTier, apply_tier_env, resolve_tier, tier_spec
 
 
@@ -43,7 +43,7 @@ def _heuristic_guide(clades: list[dict[str, Any]]) -> dict[str, Any]:
             "docs": "knowledge membrane",
             "config": "control plane / ops niche",
             "utility": "shared substrate — watch overcrowding",
-            "other": "peripheral surface",
+            "other": "evolutionary niche",
         }.get(str(layer), "evolutionary niche")
         nice = f"{layer}:{label}"
         out["clades"].append(
@@ -65,9 +65,8 @@ def guide_taxonomy(
     force_heuristic: bool = False,
 ) -> dict[str, Any]:
     """
-    Always run an SLM-tier guide by default to name/roles for clades.
-
-    Falls back to deterministic ``slm_heuristic`` if model backends are unavailable.
+    Always guide taxonomy. Default path tries the real local SLM (Qwen 0.5B),
+    then cloud, then deterministic ``slm_heuristic``.
     """
     t = resolve_tier(tier)
     spec = apply_tier_env(t, model_override=model_override)
@@ -81,37 +80,6 @@ def guide_taxonomy(
         guided["model"] = "slm_heuristic"
         return guided
 
-    # Prefer HF for slm/standard; cloud for large/frontier when keys exist
-    backend_pref: str | bool
-    if t in {"large", "frontier"} and (
-        os.environ.get("CODEEVOLVE_LLM_API_KEY")
-        or os.environ.get("OPENAI_API_KEY")
-        or os.environ.get("ANTHROPIC_API_KEY")
-    ):
-        backend_pref = "anthropic" if os.environ.get("ANTHROPIC_API_KEY") and not (
-            os.environ.get("CODEEVOLVE_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
-        ) else "openai"
-    elif os.environ.get("CODEEVOLVE_SKIP_HF", "").lower() in {"1", "true", "yes"}:
-        if os.environ.get("CODEEVOLVE_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY"):
-            backend_pref = "openai"
-        else:
-            guided = _heuristic_guide(clades)
-            guided["tier"] = spec.name
-            guided["model"] = "slm_heuristic"
-            guided["note"] = "HF skipped and no cloud key — used slm_heuristic guide"
-            return guided
-    else:
-        backend_pref = "hf-qwen"
-
-    # Ensure resolve doesn't collapse to pure heuristic without trying
-    os.environ.setdefault("CODEEVOLVE_USE_LLM", "1")
-    backend = get_narrative_backend(backend_pref)
-    system = (
-        "You are CodeEvolve taxonomy guide. Given clades (id, seed label, layer, sample files), "
-        "return ONLY JSON: {\"clades\":[{\"id\":\"...\",\"label\":\"short evolutionary name\","
-        "\"role\":\"one sentence niche role\",\"layer_hint\":\"core|tests|docs|config|utility|other\"}]}. "
-        "Keep labels <= 40 chars. Do not invent file paths."
-    )
     payload = {
         "tier": spec.to_dict(),
         "clades": [
@@ -126,27 +94,63 @@ def guide_taxonomy(
             for c in clades[:20]
         ],
     }
-    raw = backend.write(system, payload)
-    parsed = _parse_json_blob(raw)
-    if not parsed or "clades" not in parsed:
-        guided = _heuristic_guide(clades)
-        guided["tier"] = spec.name
-        guided["model"] = f"{backend.name}+slm_heuristic_fallback"
-        guided["raw_preview"] = (raw or "")[:400]
-        return guided
+    system = (
+        "You are CodeEvolve taxonomy guide. Return ONLY JSON: "
+        '{"clades":[{"id":"...","label":"short evolutionary name",'
+        '"role":"one sentence niche role","layer_hint":"core|tests|docs|config|utility|other"}]}. '
+        "Labels <= 40 chars. Do not invent file paths."
+    )
 
-    guided = {
-        "clades": parsed.get("clades") or [],
-        "engine": backend.name,
-        "tier": spec.name,
-        "model": os.environ.get("CODEEVOLVE_HF_MODEL") or os.environ.get("CODEEVOLVE_LLM_MODEL") or spec.hf_model,
-    }
+    # 1) Real default SLM for slm/standard tiers
+    if t in {"slm", "standard"} and slm_enabled():
+        parsed = slm_json(system, payload)
+        if parsed and "clades" in parsed:
+            return {
+                "clades": parsed.get("clades") or [],
+                "engine": "hf-slm",
+                "tier": spec.name,
+                "model": os.environ.get("CODEEVOLVE_HF_MODEL") or spec.hf_model,
+            }
+
+    # 2) Cloud for large/frontier or if SLM unavailable but key present
+    has_cloud = bool(
+        os.environ.get("CODEEVOLVE_LLM_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
+        or os.environ.get("ANTHROPIC_API_KEY")
+    )
+    if has_cloud and (t in {"large", "frontier"} or not slm_enabled()):
+        backend_pref = (
+            "anthropic"
+            if os.environ.get("ANTHROPIC_API_KEY")
+            and not (os.environ.get("CODEEVOLVE_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY"))
+            else "openai"
+        )
+        backend = get_narrative_backend(backend_pref)
+        raw = backend.write(system, payload)
+        parsed = _parse_json_blob(raw)
+        if parsed and "clades" in parsed:
+            return {
+                "clades": parsed.get("clades") or [],
+                "engine": backend.name,
+                "tier": spec.name,
+                "model": os.environ.get("CODEEVOLVE_LLM_MODEL") or spec.cloud_model,
+            }
+
+    # 3) Deterministic SLM-style guide (always available)
+    guided = _heuristic_guide(clades)
+    guided["tier"] = spec.name
+    guided["model"] = "slm_heuristic"
+    guided["note"] = "Real SLM/cloud unavailable — used slm_heuristic"
     return guided
 
 
 def apply_guidance(clades: list[Any], guidance: dict[str, Any]) -> dict[str, Any]:
     """Mutate Clade objects in-place with guided labels/roles; return meta."""
-    by_id = {c["id"]: c for c in (guidance.get("clades") or []) if isinstance(c, dict) and c.get("id")}
+    by_id = {
+        c["id"]: c
+        for c in (guidance.get("clades") or [])
+        if isinstance(c, dict) and c.get("id")
+    }
     for clade in clades:
         g = by_id.get(clade.id)
         if not g:
@@ -162,27 +166,10 @@ def apply_guidance(clades: list[Any], guidance: dict[str, Any]) -> dict[str, Any
             "other",
         }:
             clade.layer = str(g["layer_hint"])
-        # stash role on object dynamically for to_dict enrichment
-        setattr(clade, "role", str(g.get("role") or "")[:200])
+        clade.role = str(g.get("role") or "")[:200]
     return {
         "engine": guidance.get("engine") or guidance.get("model"),
         "tier": guidance.get("tier"),
         "model": guidance.get("model"),
         "note": guidance.get("note"),
     }
-
-
-def default_study_backend(tier: str | None = None) -> str:
-    """Backend name for evolutionary report polish at this tier."""
-    t = resolve_tier(tier)
-    apply_tier_env(t)
-    if t == "slm":
-        name = resolve_backend_name("hf-qwen")
-        if name == "heuristic" and (
-            os.environ.get("CODEEVOLVE_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
-        ):
-            return "openai"
-        return "slm" if name == "heuristic" else name
-    if t in {"large", "frontier"}:
-        return resolve_backend_name("auto")
-    return resolve_backend_name("hf-qwen")

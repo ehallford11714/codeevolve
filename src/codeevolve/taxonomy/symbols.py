@@ -88,6 +88,32 @@ def _scan_text(path: str, text: str) -> list[SymbolNode]:
     return out
 
 
+def _scan_python_treesitter(path: str, text: str) -> list[SymbolNode] | None:
+    try:
+        from tree_sitter_languages import get_parser  # type: ignore
+    except Exception:
+        return None
+    try:
+        parser = get_parser("python")
+        tree = parser.parse(text.encode("utf-8"))
+    except Exception:
+        return None
+    out: list[SymbolNode] = []
+    stack = [tree.root_node]
+    while stack:
+        node = stack.pop()
+        stack.extend(node.children)
+        if node.type in {"function_definition", "class_definition", "async_function_definition"}:
+            name_node = node.child_by_field_name("name")
+            if not name_node:
+                continue
+            name = text[name_node.start_byte : name_node.end_byte]
+            kind = "class" if node.type == "class_definition" else "function"
+            line = node.start_point[0] + 1
+            out.append(SymbolNode(f"{path}::{name}", kind, path, line))
+    return out
+
+
 def extract_symbols(
     repo: Path | str,
     *,
@@ -96,10 +122,12 @@ def extract_symbols(
 ) -> SymbolReport:
     repo = Path(repo)
     engine = "regex"
+    ts_ok = False
     try:
-        import tree_sitter_languages  # type: ignore  # noqa: F401
+        from tree_sitter_languages import get_parser  # type: ignore  # noqa: F401
 
-        engine = "regex+tree_sitter_available"
+        ts_ok = True
+        engine = "tree_sitter+regex"
     except Exception:
         pass
 
@@ -121,7 +149,11 @@ def extract_symbols(
             continue
         if len(text) > 1_500_000:
             continue
-        found = _scan_text(rel, text)
+        found: list[SymbolNode] = []
+        if ts_ok and rel.endswith(".py"):
+            found = _scan_python_treesitter(rel, text) or []
+        if not found:
+            found = _scan_text(rel, text)
         symbols.extend(found)
         by_path[rel] += len(found)
         for s in found:

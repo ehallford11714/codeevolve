@@ -16,6 +16,7 @@ class DriftReport:
     global_drift: float
     clade_drift: list[dict[str, Any]] = field(default_factory=list)
     neutral_churn: float = 0.0
+    alleles: dict[str, Any] = field(default_factory=dict)
     summary: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -23,11 +24,17 @@ class DriftReport:
             "global_drift": self.global_drift,
             "clade_drift": list(self.clade_drift),
             "neutral_churn": self.neutral_churn,
+            "alleles": dict(self.alleles),
             "summary": self.summary,
         }
 
 
-def analyze_drift(commits: list[CommitRecord], taxonomy: TaxonomyReport) -> DriftReport:
+def analyze_drift(
+    commits: list[CommitRecord],
+    taxonomy: TaxonomyReport,
+    *,
+    symbols: Any | None = None,
+) -> DriftReport:
     if not commits:
         return DriftReport(0.0, summary="No commits")
 
@@ -79,13 +86,21 @@ def analyze_drift(commits: list[CommitRecord], taxonomy: TaxonomyReport) -> Drif
     churn_ratio = late_churn / early_churn
     neutral = max(0.0, min(1.0, (churn_ratio - 1.0) * 0.5 * (1.0 - global_drift)))
 
+    alleles: dict[str, Any] = {}
+    if symbols is not None:
+        from codeevolve.genetics.alleles import analyze_allele_drift
+
+        alleles = analyze_allele_drift(symbols).to_dict()
+
     summary = (
         f"Global drift={global_drift:.2f}; worst clade drift="
         f"{clade_drift[0]['drift'] if clade_drift else 0:.2f}; neutral_churn={neutral:.2f}"
+        + (f"; allele_mutants={alleles.get('mutant_count', 0)}" if alleles else "")
     )
     return DriftReport(
         global_drift=global_drift,
         clade_drift=clade_drift[:20],
         neutral_churn=round(neutral, 4),
+        alleles=alleles,
         summary=summary,
     )

@@ -1,5 +1,6 @@
 """Report writers: trend, full repo report."""
 
+from codeevolve.report.diff import ReportDiff, diff_reports, load_previous
 from codeevolve.report.repo_report import RepoReportDoc, write_repo_report
 from codeevolve.report_trend import (
     HeuristicBackend,
@@ -21,4 +22,7 @@ __all__ = [
     "write_trend_report",
     "RepoReportDoc",
     "write_repo_report",
+    "ReportDiff",
+    "diff_reports",
+    "load_previous",
 ]

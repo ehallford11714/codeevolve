@@ -88,7 +88,14 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 - [Metrics](docs/METRICS.md)
 - [Cloud / HF Qwen](docs/CLOUD.md)
 
-**0.4** defaults taxonomy guidance to an **SLM tier** (`--model-tier slm|standard|large|frontier`), and adds fatigue / cognitive-load / drift / stability-v2 into reports. See [docs/CLOUD.md](docs/CLOUD.md).
+**0.5** adds a **real default SLM** path (on-demand Qwen 0.5B), allele/clone drift, calibrated scores, `--previous` diffs, `comment` / `ci` / `dashboard`, GitHub milestone sprints, tree-sitter symbols (optional), and sentence-transformers embeddings (`CODEEVOLVE_USE_ST_EMBED=1`). See [docs/CLOUD.md](docs/CLOUD.md).
+
+```powershell
+# Diff + dashboard + PR comment + CI gate
+python -m codeevolve --repo owner/repo analyze --out report.json --previous report.prev.json --dashboard-out dash.html
+python -m codeevolve comment --report report.json --out pr.md
+python -m codeevolve ci --report report.json --previous report.prev.json
+```
 
 ## License
 

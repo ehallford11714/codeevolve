@@ -1,7 +1,9 @@
-"""Decomposed code-stability scores."""
+"""Decomposed code-stability scores (calibrated soft curves)."""
 
 from __future__ import annotations
 
+import math
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,6 +34,11 @@ class StabilityBundle:
         }
 
 
+def _soft_inv(x: float, *, k: float = 3.0) -> float:
+    """Map pressure x>=0 to (0,1] with diminishing returns."""
+    return 1.0 / (1.0 + k * max(0.0, x))
+
+
 def compute_stability_v2(
     commits: list[CommitRecord],
     metrics: MetricBundle,
@@ -39,27 +46,26 @@ def compute_stability_v2(
     fatigue: FatigueReport | None = None,
     load: CognitiveLoadReport | None = None,
 ) -> StabilityBundle:
-    import re
-
     n = max(1, len(commits))
     top = metrics.hot_files[0]["touches"] if metrics.hot_files else 0
     concentration = top / n
     util = sum(1 for c in taxonomy.clades if c.layer == "utility")
     util_share = util / max(1, len(taxonomy.clades))
-    structural = max(0.0, 1.0 - 0.5 * concentration - 0.3 * util_share - 0.2 * (load.load_index if load else 0))
+    load_p = load.load_index if load else 0.0
+    structural = _soft_inv(0.9 * concentration + 0.5 * util_share + 0.4 * load_p, k=2.2)
 
-    behavioral = max(0.0, 1.0 - 2.0 * metrics.revert_rate)
-    dependency = max(0.0, 1.0 - 2.5 * metrics.dependency_rate)
+    behavioral = _soft_inv(metrics.revert_rate, k=4.0)
+    dependency = _soft_inv(metrics.dependency_rate, k=3.5)
 
     test_t = sum(1 for c in commits for f in c.files if re.search(r"(^|/)tests?(/|$)|_test\.|spec\.", f, re.I))
-    prod_t = sum(1 for c in commits for f in c.files if not re.search(r"(^|/)tests?(/|$)|_test\.|spec\.", f, re.I))
+    prod_t = sum(
+        1 for c in commits for f in c.files if not re.search(r"(^|/)tests?(/|$)|_test\.|spec\.", f, re.I)
+    )
     test_ratio = test_t / max(1, prod_t)
-    test = max(0.0, min(1.0, test_ratio))
+    # map ratio with soft saturation around 0.5–1.0
+    test = max(0.0, min(1.0, 1.0 - math.exp(-2.2 * test_ratio)))
 
-    if fatigue:
-        rhythm = max(0.0, 1.0 - fatigue.fatigue_score)
-    else:
-        rhythm = 0.7
+    rhythm = _soft_inv(fatigue.fatigue_score if fatigue else 0.25, k=2.5)
 
     composite = (
         0.25 * structural

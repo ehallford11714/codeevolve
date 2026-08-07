@@ -89,7 +89,10 @@ def analyze_risk(
         path = hot["path"]
         touches = hot["touches"]
         blast = deg.get(path, 0)
-        sev = min(1.0, 0.35 + touches / n + blast / 40.0)
+        # Soft-cap hotspot severity so mature OSS doesn't all score 1.0
+        import math
+
+        sev = min(1.0, 0.35 + 0.35 * math.log1p(touches) / math.log1p(n) + 0.25 * math.log1p(blast) / math.log1p(40))
         points.append(
             FailurePoint(
                 id=f"W{len(points)+1}",

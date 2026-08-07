@@ -159,8 +159,13 @@ def analyze_debt(
                 }
             )
 
-    raw = 0.15 * len(dep_hits) + 0.05 * len(todo_hits) + 0.2 * len(mistakes)
-    score = max(0.0, min(1.0, raw / 5.0))
+    # Soft-cap so large mature repos don't saturate at 1.0 from docstring "deprecated" hits
+    import math
+
+    dep_term = math.log1p(len(dep_hits)) / math.log1p(80)
+    todo_term = math.log1p(len(todo_hits)) / math.log1p(40)
+    mist_term = min(1.0, len(mistakes) / 4.0)
+    score = max(0.0, min(1.0, 0.45 * dep_term + 0.25 * todo_term + 0.30 * mist_term))
     summary = (
         f"Debt score {score:.2f}: {len(dep_hits)} deprecation signals, "
         f"{len(todo_hits)} TODO/FIXME debt markers, {len(mistakes)} architectural patterns."

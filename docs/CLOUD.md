@@ -20,7 +20,16 @@ python -m codeevolve --model-tier large --model gpt-4o --repo . analyze
 | `large` | Qwen2.5-7B | gpt-4o | Deeper evolutionary studies |
 | `frontier` | Qwen2.5-14B | gpt-4o / Claude Opus | Highest-fidelity narratives |
 
-Taxonomy guidance always runs (unless `--no-taxonomy-guide`). If HF/cloud is unavailable, a deterministic **`slm_heuristic`** guide still labels niches so taxonomy never skips SLM-style guidance.
+Taxonomy guidance always runs (unless `--no-taxonomy-guide`). **Default path tries the real local SLM** (`Qwen/Qwen2.5-0.5B-Instruct`, on-demand download via `ensure_default_slm`). If HF/cloud is unavailable, a deterministic **`slm_heuristic`** guide still labels niches.
+
+```powershell
+pip install -e ".[hf]"                 # real default SLM
+python -m codeevolve hardware --ensure-slm
+# optional sharper embeddings:
+# pip install -e ".[embed]"; $env:CODEEVOLVE_USE_ST_EMBED="1"
+# optional tree-sitter symbols:
+# pip install -e ".[treesitter]"
+```
 
 ## Backend selection
 
