@@ -177,6 +177,7 @@ class CodeEvolve:
         vector_backend: str | None = None,
         previous_report: Path | str | None = None,
         ensure_slm: bool = True,
+        rev: str | None = None,
     ) -> EvolveReport:
         apply_tier_env(self.model_tier, model_override=self.model_override)
         if ensure_slm and self.model_tier in {"slm", "standard"}:
@@ -185,7 +186,7 @@ class CodeEvolve:
         if use_llm is None:
             use_llm = self.model_tier
 
-        commits = load_commits(self.repo, max_commits=max_commits, since=since)
+        commits = load_commits(self.repo, max_commits=max_commits, since=since, rev=rev)
         metrics = compute_metrics(commits)
         metrics.hot_files = enrich_hotspots(self.repo, metrics.hot_files)
 
@@ -393,8 +394,20 @@ class CodeEvolve:
         return write_dashboard(report, path)
 
     @staticmethod
-    def evaluate(work_dir: Path | str | None = None):
-        """Run synthetic-fixture evaluation suite (detection agreement scores)."""
-        from codeevolve.eval.runner import run_evaluation
+    def evaluate(
+        work_dir: Path | str | None = None,
+        *,
+        suite: str = "all",
+        offline: bool = False,
+        public_case_ids: list[str] | None = None,
+    ):
+        """Run evaluation suite (synthetic fixtures + optional public scorecard)."""
+        from codeevolve.eval.runner import Suite, run_evaluation
 
-        return run_evaluation(work_dir)
+        s: Suite = suite if suite in {"synthetic", "public", "all"} else "all"  # type: ignore[assignment]
+        return run_evaluation(
+            work_dir,
+            suite=s,
+            offline=offline,
+            public_case_ids=public_case_ids,
+        )

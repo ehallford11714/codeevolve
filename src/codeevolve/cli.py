@@ -115,15 +115,37 @@ def main(argv: list[str] | None = None) -> int:
     dash.add_argument("--report", required=True)
     dash.add_argument("--out", default="codeevolve_dashboard.html")
 
-    ev = sub.add_parser("evaluate", help="Run synthetic-fixture evaluation suite")
+    ev = sub.add_parser("evaluate", help="Run evaluation (synthetic + public-repo scorecard)")
     ev.add_argument("--work-dir", default=None, help="Scratch dir for fixtures (default .codeevolve_eval)")
     ev.add_argument("--out", default=None, help="Write evaluation JSON")
     ev.add_argument("--md-out", default=None, help="Write evaluation markdown")
+    ev.add_argument(
+        "--suite",
+        default="all",
+        choices=["synthetic", "public", "all"],
+        help="synthetic fixtures, public GitHub scorecard, or both (default all)",
+    )
+    ev.add_argument(
+        "--offline",
+        action="store_true",
+        help="Do not clone; only use cached public repos (skip if missing)",
+    )
+    ev.add_argument(
+        "--public-case",
+        action="append",
+        default=[],
+        help="Limit public suite to case id (repeatable)",
+    )
 
     args = p.parse_args(argv)
 
     if args.cmd == "evaluate":
-        report = CodeEvolve.evaluate(args.work_dir)
+        report = CodeEvolve.evaluate(
+            args.work_dir,
+            suite=args.suite,
+            offline=bool(args.offline),
+            public_case_ids=args.public_case or None,
+        )
         if args.out:
             Path(args.out).write_text(
                 json.dumps(report.to_dict(), indent=2, default=str),
@@ -134,7 +156,11 @@ def main(argv: list[str] | None = None) -> int:
         _print(
             {
                 "summary": report.summary,
+                "suite": report.suite,
                 "overall_score": report.overall_score,
+                "synthetic_score": report.synthetic_score,
+                "public_score": report.public_score,
+                "public_skipped": report.public_skipped,
                 "passed_cases": report.passed_cases,
                 "total_cases": report.total_cases,
                 "cases": [
@@ -142,7 +168,10 @@ def main(argv: list[str] | None = None) -> int:
                 ],
             }
         )
-        return 0 if report.overall_score >= 0.7 else 1
+        # Pass if synthetic (when present) is healthy; public may be skipped offline
+        synth_ok = report.synthetic_score is None or report.synthetic_score >= 0.7
+        public_ok = report.public_score is None or report.public_score >= 0.55
+        return 0 if (synth_ok and public_ok and report.overall_score >= 0.55) else 1
 
     if args.cmd == "tiers":
         _print({k: v.to_dict() for k, v in TIERS.items()})

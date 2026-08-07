@@ -88,7 +88,7 @@ def test_benchmark_suite_runs(tmp_path, monkeypatch):
     monkeypatch.setenv("CODEEVOLVE_SKIP_HF", "1")
     suite = materialize_suite(tmp_path / "fx")
     assert len(suite) == 4
-    ev = run_evaluation(tmp_path / "eval_work")
+    ev = run_evaluation(tmp_path / "eval_work", suite="synthetic")
     assert ev.total_cases >= 5
     assert ev.overall_score > 0.0
     assert "CodeEvolve Evaluation Report" in ev.markdown

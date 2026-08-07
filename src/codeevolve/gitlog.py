@@ -123,20 +123,54 @@ def _parse_numstat(repo: Path, sha: str) -> tuple[list[str], int, int, list[tupl
     return files, ins, dels, renames
 
 
+def resolve_rev(repo: Path | str, rev: str) -> str:
+    """Resolve a ref/tag/SHA to a commit SHA (raises if missing)."""
+    repo = assert_git_repo(Path(repo))
+    return _run_git(repo, "rev-parse", "--verify", f"{rev}^{{commit}}").strip()
+
+
+def ensure_rev(repo: Path | str, rev: str) -> str:
+    """Resolve rev; try fetching tags/heads from origin if missing."""
+    repo = assert_git_repo(Path(repo))
+    try:
+        return resolve_rev(repo, rev)
+    except RuntimeError:
+        pass
+    subprocess.run(
+        ["git", "-C", str(repo), "fetch", "--tags", "--force", "origin", f"+refs/tags/{rev}:refs/tags/{rev}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "fetch", "origin", rev],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return resolve_rev(repo, rev)
+
+
 def load_commits(
     repo: Path | str,
     *,
     max_commits: int = 500,
     since: str | None = None,
     with_numstat: bool = True,
+    rev: str | None = None,
 ) -> list[CommitRecord]:
-    """Load commit metadata (and optional per-commit numstat)."""
+    """Load commit metadata (and optional per-commit numstat).
+
+    ``rev`` limits history to commits reachable from that ref (tag/branch/SHA).
+    """
     repo = assert_git_repo(Path(repo))
     # RS=%x1e FS=%x1f
     fmt = "%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f%b%x1e"
     args = ["log", f"--max-count={max_commits}", f"--pretty=format:{fmt}"]
     if since:
         args.append(f"--since={since}")
+    if rev:
+        args.append(rev)
     raw = _run_git(repo, *args)
     if not raw.strip():
         return []

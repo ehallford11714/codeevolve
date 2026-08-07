@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codeevolve"
-version = "0.9.0"
-description = "Code evolution with MiniLM taxonomy embeddings, Word2Vec change semantics, Chroma/Pinecone niches, and CI/PR gates."
+version = "0.10.0"
+description = "Code evolution analysis with MiniLM taxonomy, public-repo scorecard eval, hypothesis panels, and CI/PR gates."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
@@ -47,3 +47,6 @@ codeevolve = ["py.typed"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+  "integration: live network / public-repo scorecard tests",
+]
