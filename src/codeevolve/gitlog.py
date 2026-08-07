@@ -1,0 +1,169 @@
+"""Git history ingestion via the git CLI."""
+
+from __future__ import annotations
+
+import re
+import subprocess
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+
+@dataclass
+class CommitRecord:
+    sha: str
+    parents: list[str]
+    author: str
+    email: str
+    timestamp: datetime
+    subject: str
+    body: str = ""
+    is_revert: bool = False
+    reverts_sha: Optional[str] = None
+    files: list[str] = field(default_factory=list)
+    insertions: int = 0
+    deletions: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "sha": self.sha,
+            "parents": list(self.parents),
+            "author": self.author,
+            "email": self.email,
+            "timestamp": self.timestamp.isoformat(),
+            "subject": self.subject,
+            "body": self.body,
+            "is_revert": self.is_revert,
+            "reverts_sha": self.reverts_sha,
+            "files": list(self.files),
+            "insertions": self.insertions,
+            "deletions": self.deletions,
+        }
+
+
+_REVERT_RE = re.compile(r"revert(?:ed)?\s+(?:commit\s+)?([0-9a-f]{7,40})", re.I)
+_SHA_RE = re.compile(r"\b([0-9a-f]{7,40})\b", re.I)
+
+
+def _run_git(repo: Path, *args: str) -> str:
+    proc = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or f"git {' '.join(args)} failed")
+    return proc.stdout
+
+
+def assert_git_repo(repo: Path) -> Path:
+    repo = Path(repo).resolve()
+    try:
+        top = _run_git(repo, "rev-parse", "--show-toplevel").strip()
+        return Path(top)
+    except Exception as exc:
+        raise RuntimeError(f"not a git repository: {repo}") from exc
+
+
+def _parse_numstat(repo: Path, sha: str) -> tuple[list[str], int, int]:
+    try:
+        raw = _run_git(repo, "show", "--numstat", "--format=", "--norelnotes", sha)
+    except RuntimeError:
+        try:
+            raw = _run_git(repo, "show", "--numstat", "--format=", sha)
+        except RuntimeError:
+            return [], 0, 0
+    files: list[str] = []
+    ins = dels = 0
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split("\t")
+        if len(parts) < 3:
+            continue
+        a, b, path = parts[0], parts[1], parts[2]
+        if a.isdigit():
+            ins += int(a)
+        if b.isdigit():
+            dels += int(b)
+        files.append(path)
+    return files, ins, dels
+
+
+def load_commits(
+    repo: Path | str,
+    *,
+    max_commits: int = 500,
+    since: str | None = None,
+    with_numstat: bool = True,
+) -> list[CommitRecord]:
+    """Load commit metadata (and optional per-commit numstat)."""
+    repo = assert_git_repo(Path(repo))
+    # RS=%x1e FS=%x1f
+    fmt = "%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f%b%x1e"
+    args = ["log", f"--max-count={max_commits}", f"--pretty=format:{fmt}"]
+    if since:
+        args.append(f"--since={since}")
+    raw = _run_git(repo, *args)
+    if not raw.strip():
+        return []
+
+    records: list[CommitRecord] = []
+    for chunk in raw.split("\x1e"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        parts = chunk.split("\x1f")
+        if len(parts) < 6:
+            continue
+        sha, parents_s, author, email, ts_s, subject = parts[:6]
+        body = parts[6] if len(parts) > 6 else ""
+        try:
+            ts = datetime.fromisoformat(ts_s.replace("Z", "+00:00"))
+        except ValueError:
+            ts = datetime.now(timezone.utc)
+        parents = [p for p in parents_s.split() if p]
+        blob = f"{subject}\n{body}"
+        is_revert = bool(re.search(r"\brevert\b", subject, re.I)) or bool(_REVERT_RE.search(blob))
+        reverts_sha = None
+        m = _REVERT_RE.search(blob)
+        if m:
+            reverts_sha = m.group(1)
+        elif is_revert:
+            m2 = _SHA_RE.search(body) or _SHA_RE.search(subject)
+            if m2:
+                reverts_sha = m2.group(1)
+
+        files: list[str] = []
+        ins = dels = 0
+        if with_numstat:
+            files, ins, dels = _parse_numstat(repo, sha)
+
+        records.append(
+            CommitRecord(
+                sha=sha.strip(),
+                parents=parents,
+                author=author,
+                email=email,
+                timestamp=ts,
+                subject=subject,
+                body=body.strip(),
+                is_revert=is_revert,
+                reverts_sha=reverts_sha,
+                files=files,
+                insertions=ins,
+                deletions=dels,
+            )
+        )
+    return records
+
+
+def list_tracked_files(repo: Path | str) -> list[str]:
+    repo = assert_git_repo(Path(repo))
+    out = _run_git(repo, "ls-files")
+    return [ln for ln in out.splitlines() if ln.strip()]
