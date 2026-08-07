@@ -138,6 +138,44 @@ def propose_next_experiments(
                 measure="hierarchy_trends.branch_trends + ecology.global_stage",
             )
         )
+    cal = ecology.calibration
+    if cal and cal.changepoints.points:
+        top = max(cal.changepoints.points, key=lambda p: p.magnitude)
+        exps.append(
+            NextExperiment(
+                id="changepoint_persist",
+                claim=(
+                    f"Largest activity changepoint ({top.series} {top.direction} @ {top.when.date()}) "
+                    "marks a lasting regime, not a one-month spike"
+                ),
+                falsifier="Next 3 months return to pre-CP mean within 15% without a reversing CP",
+                measure="ecology.calibration.changepoints",
+            )
+        )
+    if cal and any(a.event.kind == "security" for a in cal.anchors):
+        exps.append(
+            NextExperiment(
+                id="security_disturbance",
+                claim="Security advisory windows classify as disturbance with elevated reverts or churn",
+                falsifier="Advisory±45d segment shows maturity/consolidation with revert_rate flat",
+                measure="ecology.calibration.anchors[security]",
+            )
+        )
+    cal = ecology.calibration
+    if cal and cal.anchors:
+        a = cal.anchors[-1]
+        exps.append(
+            NextExperiment(
+                id="event_anchor",
+                claim=f"Latest lifecycle anchor {a.event.label} correctly predicts stage {a.stage}",
+                falsifier=(
+                    f"Within 90 days, calibrated stage diverges from {a.stage} without a newer "
+                    "security/major/revert_storm event"
+                ),
+                measure="ecology.calibration.global_stage + events",
+                branch=a.event.kind,
+            )
+        )
     if not exps:
         exps.append(
             NextExperiment(
@@ -252,9 +290,20 @@ def _branch_trends(
 def _lehman_narrative(ecology: EcologyReport) -> str:
     lt = ecology.lehman_trends
     lehman = ecology.lehman
+    cal = ecology.calibration
+    cal_bit = ""
+    if cal:
+        anchors = ", ".join(
+            f"{a.event.label}→{a.stage}" for a in cal.anchors[:5]
+        ) or "none"
+        cal_bit = (
+            f" Calibration method={cal.method} conf={cal.confidence:.2f}; "
+            f"events={len(cal.events.events)}, changepoints={len(cal.changepoints.points)}, "
+            f"hit_rate={cal.hit_rate}; anchors={anchors}."
+        )
     if not lt:
         return (
-            f"Global stage **{ecology.global_stage}** — {ecology.stage_rationale}. "
+            f"Global stage **{ecology.global_stage}** — {ecology.stage_rationale}.{cal_bit} "
             "Mann–Kendall trend battery unavailable."
         )
     bits = []
@@ -262,7 +311,7 @@ def _lehman_narrative(ecology: EcologyReport) -> str:
         bits.append(f"{t.series} is {t.trend} (τ={t.tau}, p≈{t.p_approx})")
     support = ", ".join(f"{k}={v}" for k, v in list(lt.law_support.items())[:6])
     return (
-        f"Global stage **{ecology.global_stage}** — {ecology.stage_rationale}. "
+        f"Global stage **{ecology.global_stage}** — {ecology.stage_rationale}.{cal_bit} "
         f"Lehman proxies: continuing_change={getattr(lehman, 'continuing_change', None)}, "
         f"growth={getattr(lehman, 'continuing_growth', None)}, "
         f"quality={getattr(lehman, 'declining_quality', None)}. "

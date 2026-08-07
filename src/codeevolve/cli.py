@@ -126,8 +126,8 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument(
         "--suite",
         default="all",
-        choices=["synthetic", "public", "taxonomy", "all"],
-        help="synthetic | taxonomy gold/RAG | public scorecard | all (default)",
+        choices=["synthetic", "public", "taxonomy", "ecology", "all"],
+        help="synthetic | taxonomy | ecology | public scorecard | all (default)",
     )
     ev.add_argument(
         "--offline",
@@ -164,6 +164,7 @@ def main(argv: list[str] | None = None) -> int:
                 "overall_score": report.overall_score,
                 "synthetic_score": report.synthetic_score,
                 "taxonomy_score": report.taxonomy_score,
+                "ecology_score": report.ecology_score,
                 "public_score": report.public_score,
                 "public_skipped": report.public_skipped,
                 "passed_cases": report.passed_cases,
@@ -176,8 +177,9 @@ def main(argv: list[str] | None = None) -> int:
         # Pass if present suites meet floors; public may be skipped offline
         synth_ok = report.synthetic_score is None or report.synthetic_score >= 0.7
         tax_ok = report.taxonomy_score is None or report.taxonomy_score >= 0.7
+        eco_ok = report.ecology_score is None or report.ecology_score >= 0.7
         public_ok = report.public_score is None or report.public_score >= 0.55
-        return 0 if (synth_ok and tax_ok and public_ok and report.overall_score >= 0.55) else 1
+        return 0 if (synth_ok and tax_ok and eco_ok and public_ok and report.overall_score >= 0.55) else 1
 
     if args.cmd == "tiers":
         _print({k: v.to_dict() for k, v in TIERS.items()})

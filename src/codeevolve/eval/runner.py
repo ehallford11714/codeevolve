@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from codeevolve.eval.benchmarks import BenchmarkCase, run_benchmark_suite
 
-Suite = Literal["synthetic", "public", "taxonomy", "all"]
+Suite = Literal["synthetic", "public", "taxonomy", "ecology", "all"]
 
 
 @dataclass
@@ -22,6 +22,7 @@ class EvaluationReport:
     synthetic_score: float | None = None
     public_score: float | None = None
     taxonomy_score: float | None = None
+    ecology_score: float | None = None
     public_skipped: list[dict[str, Any]] = field(default_factory=list)
     suite: str = "synthetic"
 
@@ -31,6 +32,7 @@ class EvaluationReport:
             "overall_score": self.overall_score,
             "synthetic_score": self.synthetic_score,
             "taxonomy_score": self.taxonomy_score,
+            "ecology_score": self.ecology_score,
             "public_score": self.public_score,
             "passed_cases": self.passed_cases,
             "total_cases": self.total_cases,
@@ -68,16 +70,19 @@ def _md_cases(title: str, blurb: str, cases: list[BenchmarkCase], overall: float
 def _combine(
     synth: float | None,
     tax: float | None,
+    ecology: float | None,
     public: float | None,
 ) -> float:
-    """Weight: taxonomy gold > public > synthetic when present."""
+    """Weight present suites (taxonomy/ecology emphasized for credibility)."""
     parts: list[tuple[float, float]] = []
     if tax is not None:
-        parts.append((0.40, tax))
+        parts.append((0.30, tax))
+    if ecology is not None:
+        parts.append((0.30, ecology))
     if public is not None:
-        parts.append((0.35, public))
+        parts.append((0.25, public))
     if synth is not None:
-        parts.append((0.25, synth))
+        parts.append((0.15, synth))
     if not parts:
         return 0.0
     wsum = sum(w for w, _ in parts)
@@ -108,6 +113,14 @@ def run_evaluation(
         tax_cases = run_taxonomy_eval(work)
         tax_score = sum(c.score for c in tax_cases) / max(1, len(tax_cases))
 
+    eco_cases: list[BenchmarkCase] = []
+    eco_score = None
+    if suite in {"ecology", "all"}:
+        from codeevolve.eval.ecology_gold import run_ecology_eval
+
+        eco_cases = run_ecology_eval(work)
+        eco_score = sum(c.score for c in eco_cases) / max(1, len(eco_cases))
+
     public_cases: list[BenchmarkCase] = []
     public_score = None
     public_skipped: list[dict[str, Any]] = []
@@ -127,12 +140,15 @@ def run_evaluation(
     elif suite == "taxonomy":
         cases = tax_cases
         overall = float(tax_score or 0.0)
+    elif suite == "ecology":
+        cases = eco_cases
+        overall = float(eco_score or 0.0)
     elif suite == "public":
         cases = public_cases
         overall = float(public_score or 0.0)
     else:
-        cases = [*synth_cases, *tax_cases, *public_cases]
-        overall = _combine(synth_score, tax_score, public_score)
+        cases = [*synth_cases, *tax_cases, *eco_cases, *public_cases]
+        overall = _combine(synth_score, tax_score, eco_score, public_score)
 
     passed = sum(1 for c in cases if c.failed == 0)
     parts = [
@@ -162,6 +178,17 @@ def run_evaluation(
             )
         )
         parts.append("")
+    if eco_score is not None:
+        parts.append(
+            _md_cases(
+                "Ecology calibration (changepoints + lifecycle events)",
+                "PELT-lite on planted regimes + event hints + calibrated stage on fixtures. "
+                "Inspired by Walden et al. arXiv:2103.11013.",
+                eco_cases,
+                eco_score,
+            )
+        )
+        parts.append("")
     if public_md:
         parts.append(public_md)
         parts.append("")
@@ -171,17 +198,14 @@ def run_evaluation(
             "",
             f"- Synthetic score: {synth_score if synth_score is not None else 'n/a'}",
             f"- Taxonomy gold/RAG: {tax_score if tax_score is not None else 'n/a'}",
+            f"- Ecology calibration: {eco_score if eco_score is not None else 'n/a'}",
             f"- Public scorecard: {public_score if public_score is not None else 'n/a'} "
             f"({len(public_skipped)} skipped)",
-            f"- Combined overall: {overall:.1%}"
-            + (
-                " (0.40·taxonomy + 0.35·public + 0.25·synthetic when all present)"
-                if synth_score is not None and tax_score is not None and public_score is not None
-                else ""
-            ),
+            f"- Combined overall: {overall:.1%}",
             "",
             "- Synthetic fixtures prove detectors fire on planted patterns.",
             "- Taxonomy gold proves keyword type paths + RAG pipeline attach evidence.",
+            "- Ecology suite proves changepoints/events recalibrate stages (hypotheses).",
             "- Public scorecard proves the tool runs on real tags with calibrated deltas.",
             "- Skipped public cases (offline / clone failure) do not count as failures.",
             "",
@@ -192,6 +216,7 @@ def run_evaluation(
         f"Eval[{suite}] overall {overall:.1%} "
         f"(synthetic={synth_score if synth_score is not None else 'n/a'}, "
         f"taxonomy={tax_score if tax_score is not None else 'n/a'}, "
+        f"ecology={eco_score if eco_score is not None else 'n/a'}, "
         f"public={public_score if public_score is not None else 'n/a'}, "
         f"skipped_public={len(public_skipped)})"
     )
@@ -204,6 +229,7 @@ def run_evaluation(
         summary=summary,
         synthetic_score=round(synth_score, 4) if synth_score is not None else None,
         taxonomy_score=round(tax_score, 4) if tax_score is not None else None,
+        ecology_score=round(eco_score, 4) if eco_score is not None else None,
         public_score=round(public_score, 4) if public_score is not None else None,
         public_skipped=public_skipped,
         suite=suite,

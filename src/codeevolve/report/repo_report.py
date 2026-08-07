@@ -166,6 +166,21 @@ def _template(ctx: dict[str, Any]) -> str:
             f"- Self regulation: {lehman.get('self_regulation')}",
             f"- Organisational stability: {lehman.get('organisational_stability')}",
             "",
+            "### Ecology calibration (events + changepoints)",
+            (
+                f"method={(e.get('calibration') or {}).get('method')}, "
+                f"confidence={(e.get('calibration') or {}).get('confidence')}, "
+                f"hit_rate={(e.get('calibration') or {}).get('hit_rate')}, "
+                f"heuristic={(e.get('calibration') or {}).get('heuristic_stage')}. "
+                f"{(e.get('calibration') or {}).get('summary') or '_n/a_'}"
+            ),
+            "\n".join(
+                f"- **{a.get('event', {}).get('label')}** ({a.get('event', {}).get('kind')}) → "
+                f"{a.get('stage')} conf={a.get('confidence')} Δdays={a.get('delta_days')}"
+                for a in ((e.get("calibration") or {}).get("anchors") or [])[:10]
+            )
+            or "- No lifecycle anchors.",
+            "",
             "### Hypothesis panel",
             (ctx.get("hypothesis_panel") or {}).get("disclaimer") or "",
             (ctx.get("hypothesis_panel") or {}).get("summary") or "_n/a_",

@@ -89,7 +89,7 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 - [Metrics](docs/METRICS.md)
 - [Cloud / HF Qwen](docs/CLOUD.md)
 
-**0.12** closes credibility gaps: **SLM + RAG taxonomy**, deep keyword hierarchies, falsifiable next-experiments, and a **taxonomy gold** eval suite (`evaluate --suite taxonomy`) — see [docs/RAG.md](docs/RAG.md), [docs/HIERARCHY.md](docs/HIERARCHY.md), [docs/EVAL.md](docs/EVAL.md).
+**0.13** calibrates ecology to **lifecycle events + PELT changepoints** (`evaluate --suite ecology`) — see [docs/ECOLOGY.md](docs/ECOLOGY.md). **0.12** SLM+RAG taxonomy + keyword hierarchies ([docs/RAG.md](docs/RAG.md), [docs/HIERARCHY.md](docs/HIERARCHY.md)).
 
 ```powershell
 python -m codeevolve --repo . hierarchy --md-out built_trends.md

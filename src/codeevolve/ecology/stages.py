@@ -1,4 +1,4 @@
-"""Per-clade ecological stages + Lehman law proxies + niches."""
+"""Per-clade ecological stages + Lehman proxies + event/changepoint calibration."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
+from codeevolve.ecology.calibration import EcologyCalibration, calibrate_ecology
 from codeevolve.ecology.lehman import LehmanScores, compute_lehman
 from codeevolve.ecology.niches import NicheReport, analyze_niches
 from codeevolve.ecology.trends import LehmanTrendReport, analyze_lehman_trends
@@ -44,6 +45,7 @@ class EcologyReport:
     niches: NicheReport
     timeline: list[dict[str, Any]] = field(default_factory=list)
     lehman_trends: LehmanTrendReport | None = None
+    calibration: EcologyCalibration | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -54,6 +56,7 @@ class EcologyReport:
             "lehman_trends": self.lehman_trends.to_dict() if self.lehman_trends else None,
             "niches": self.niches.to_dict(),
             "timeline": list(self.timeline),
+            "calibration": self.calibration.to_dict() if self.calibration else None,
         }
 
 
@@ -77,6 +80,11 @@ def analyze_ecology(
     commits: list[CommitRecord],
     metrics: MetricBundle,
     taxonomy: TaxonomyReport,
+    *,
+    repo=None,
+    owner: str | None = None,
+    name: str | None = None,
+    include_ghsa: bool = True,
 ) -> EcologyReport:
     phy = analyze_phylogeny(commits, metrics)
     clade_churn: dict[str, int] = defaultdict(int)
@@ -131,12 +139,40 @@ def analyze_ecology(
                 }
             )
 
+    calibration = None
+    global_stage = phy.current_stage
+    stage_rationale = phy.stage_rationale
+    if repo is not None:
+        calibration = calibrate_ecology(
+            repo,
+            commits,
+            metrics,
+            owner=owner,
+            name=name,
+            include_ghsa=include_ghsa,
+        )
+        global_stage = calibration.global_stage
+        stage_rationale = calibration.stage_rationale
+        # Event timeline alongside commit chunks
+        for seg in calibration.segments[:12]:
+            timeline.append(
+                {
+                    "window": f"cal:{seg.label}",
+                    "stage": seg.stage,
+                    "source": seg.source,
+                    "confidence": seg.confidence,
+                    "start": seg.start.isoformat(),
+                    "end": seg.end.isoformat(),
+                }
+            )
+
     return EcologyReport(
-        global_stage=phy.current_stage,
-        stage_rationale=phy.stage_rationale,
+        global_stage=global_stage,
+        stage_rationale=stage_rationale,
         clade_stages=clade_stages,
         lehman=compute_lehman(commits, metrics),
         niches=analyze_niches(taxonomy),
         timeline=timeline,
         lehman_trends=analyze_lehman_trends(commits, metrics),
+        calibration=calibration,
     )

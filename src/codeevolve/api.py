@@ -208,7 +208,15 @@ class CodeEvolve:
             display=self.display,
         )
         genetics = analyze_genetics(commits, taxonomy)
-        ecology = analyze_ecology(commits, metrics, taxonomy)
+        ecology = analyze_ecology(
+            commits,
+            metrics,
+            taxonomy,
+            repo=self.repo,
+            owner=self._gh[0] if self._gh else None,
+            name=self._gh[1] if self._gh else None,
+            include_ghsa=True,
+        )
         hierarchy_trends = analyze_hierarchy_trends(commits, taxonomy, ecology)
         symbols = extract_symbols(self.repo, max_files=max_symbol_files) if include_symbols else None
         drift = analyze_drift(commits, taxonomy, symbols=symbols)
@@ -412,7 +420,9 @@ class CodeEvolve:
         """Run evaluation suite (synthetic + taxonomy gold/RAG + public scorecard)."""
         from codeevolve.eval.runner import Suite, run_evaluation
 
-        s: Suite = suite if suite in {"synthetic", "public", "taxonomy", "all"} else "all"  # type: ignore[assignment]
+        s: Suite = (  # type: ignore[assignment]
+            suite if suite in {"synthetic", "public", "taxonomy", "ecology", "all"} else "all"
+        )
         return run_evaluation(
             work_dir,
             suite=s,

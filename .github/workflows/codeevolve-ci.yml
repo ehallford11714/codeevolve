@@ -29,15 +29,17 @@ jobs:
             --report-out codeevolve_repo_report.md \
             --refactor-out codeevolve_refactor.md \
             --dashboard-out codeevolve_dashboard.html
-      - name: Synthetic + taxonomy evaluation
+      - name: Synthetic + taxonomy + ecology evaluation
         env:
           CODEEVOLVE_TAXONOMY_HEURISTIC: "1"
           CODEEVOLVE_SKIP_HF: "1"
           CODEEVOLVE_SKIP_EMBED: "1"
           CODEEVOLVE_VECTOR_BACKEND: "memory"
+          CODEEVOLVE_SKIP_GHSA: "1"
         run: |
           python -m codeevolve evaluate --suite synthetic --md-out eval_synthetic.md
           python -m codeevolve evaluate --suite taxonomy --md-out eval_taxonomy.md
+          python -m codeevolve evaluate --suite ecology --md-out eval_ecology.md
       - name: CI gate
         env:
           CODEEVOLVE_TAXONOMY_HEURISTIC: "1"

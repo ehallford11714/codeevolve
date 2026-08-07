@@ -8,7 +8,8 @@ CodeEvolve treats evolutionary “laws” and ecological stages as **hypotheses*
 2. **Signal confidence** — hero ranking (coupling · churn×complexity · offboarding)  
 3. **Synthetic fixtures** — planted ground truth (detection agreement)  
 4. **Taxonomy gold + RAG** — path→type_path prefixes + RAG index/typed clades/engine meta  
-5. **Public-repo scorecard** — real GitHub tags; smoke + before/after directional checks  
+5. **Ecology calibration** — PELT changepoints + lifecycle events (see [ECOLOGY.md](ECOLOGY.md))  
+6. **Public-repo scorecard** — real GitHub tags; smoke + before/after directional checks  
 
 ## Run evaluation
 
@@ -25,6 +26,10 @@ python -m codeevolve evaluate --suite synthetic
 
 # Taxonomy type gold + RAG pipeline
 python -m codeevolve evaluate --suite taxonomy
+
+# Ecology changepoints + lifecycle calibration
+$env:CODEEVOLVE_SKIP_GHSA = "1"
+python -m codeevolve evaluate --suite ecology
 
 # Require real SLM+RAG engine
 $env:CODEEVOLVE_LIVE_SLM = "1"
