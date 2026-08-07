@@ -69,7 +69,11 @@ class SemanticTaxonomyReport:
 
 def _file_document(repo: Path, path: str) -> str:
     """Richer doc for MiniLM: path roles + identifiers + comment lines."""
+    from codeevolve.taxonomy.keywords import classify_path
+
     layer_bits = path_tokens(path)
+    hit = classify_path(path)
+    type_bits = " ".join(hit.type_path)
     idents: list[str] = []
     comments: list[str] = []
     fp = repo / path
@@ -86,6 +90,7 @@ def _file_document(repo: Path, path: str) -> str:
     # Natural-language-ish bag MiniLM can use
     return (
         f"file {path.replace('/', ' ').replace('_', ' ')} "
+        f"type {type_bits} "
         f"modules {' '.join(layer_bits)} "
         f"symbols {' '.join(idents[:60])} "
         f"notes {' '.join(comments[:40])}"

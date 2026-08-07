@@ -25,7 +25,8 @@ CLI / CodeEvolve(repo|github-url)
 | Package | Role |
 |---------|------|
 | `ingest/` | GitHub URL → cache; Issues/PR API selection pressure |
-| `taxonomy/` | Hierarchy + clades + regex symbol phylogeny |
+| `taxonomy/` | Keyword ontology + RAG chunks + SLM guide + MiniLM/W2V + symbols |
+| `ecology/` | Stages, Lehman/Mann–Kendall, hierarchy trend narratives |
 | `genetics/` | Rename-aware lineage, gene flow, fitness |
 | `ecology/` | Stages, niches, Lehman proxies |
 | `risk/` | Failure points + blast radius |

@@ -52,6 +52,8 @@ def top_down_plan(context: dict[str, Any]) -> PlanOutline:
         "Executive summary",
         "Rate of change & momentum",
         "Revert rate & stability",
+        "What was built (deep hierarchy)",
+        "Ecological trends on typed branches",
         "Semantic trends & taxonomy",
         "Phylogeny & ecological stage",
         "Dependency churn",
@@ -127,9 +129,26 @@ class HeuristicBackend:
                 f"Code stability score={m.get('code_stability')} (higher is healthier)."
             ),
             "",
+            "## What was built (deep hierarchy)",
+            ((context.get("hierarchy_trends") or {}).get("built_narrative") or "_n/a_"),
+            "```",
+            ((context.get("hierarchy_trends") or {}).get("ascii_tree") or "(empty)"),
+            "```",
+            "",
+            "## Ecological trends on typed branches",
+            ((context.get("hierarchy_trends") or {}).get("ecology_narrative") or "_n/a_"),
+            "",
+            ((context.get("hierarchy_trends") or {}).get("lehman_narrative") or ""),
+            "",
+            "\n".join(
+                f"- {b.get('narrative')}"
+                for b in ((context.get("hierarchy_trends") or {}).get("branch_trends") or [])[:10]
+            )
+            or "- No branch trends.",
+            "",
             "## Semantic trends & taxonomy",
             f"Theme mix: {top_themes}. Semantic drift={s.get('semantic_drift')}.",
-            "Hierarchy root layers are summarized in the JSON report under `semantics.hierarchy`.",
+            "Deep keyword hierarchy lives under `taxonomy.keyword_taxonomy` and `hierarchy_trends`.",
             "",
             "## Phylogeny & ecological stage",
             (

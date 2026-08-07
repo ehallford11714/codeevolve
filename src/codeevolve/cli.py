@@ -60,11 +60,12 @@ def main(argv: list[str] | None = None) -> int:
     an.add_argument("--no-fork-lineage", action="store_true")
     an.add_argument("--peer-repo", action="append", default=[], help="Peer repo path for blob lineage")
     an.add_argument("--no-semantic", action="store_true", help="Skip Word2Vec + vector semantic taxonomy")
+    an.add_argument("--no-rag", action="store_true", help="Skip codebase chunking / RAG evidence for SLM taxonomy")
     an.add_argument(
         "--vector-backend",
         default=None,
         choices=["auto", "memory", "chromadb", "pinecone"],
-        help="Semantic taxonomy store (default auto: pinecone→chroma→memory)",
+        help="Vector store for RAG + semantic taxonomy (default auto: pinecone→chroma→memory)",
     )
 
     for name, help_ in (
@@ -73,6 +74,8 @@ def main(argv: list[str] | None = None) -> int:
         ("phylogeny", "Phylogeny + ecological stage"),
         ("semantics", "Semantic themes"),
         ("taxonomy", "SLM-guided taxonomy"),
+        ("hierarchy", "Deep nested build hierarchy + ecological trend report"),
+        ("keyword-taxonomy", "Keyword code-type ontology + path classifications"),
         ("word2vec", "Word2Vec over code-evolution corpus"),
         ("semantic-taxonomy", "Chroma/Pinecone semantic niches"),
         ("symbols", "Symbol phylogeny"),
@@ -91,8 +94,9 @@ def main(argv: list[str] | None = None) -> int:
         sp = sub.add_parser(name, help=help_)
         if name != "tiers":
             sp.add_argument("--max-commits", type=int, default=400)
-        if name in {"report", "refactor"}:
-            sp.add_argument("--llm", nargs="?", const="auto", default=None)
+        if name in {"report", "refactor", "hierarchy"}:
+            if name != "hierarchy":
+                sp.add_argument("--llm", nargs="?", const="auto", default=None)
             sp.add_argument("--md-out", default=None)
 
     hw = sub.add_parser("hardware", help="Hardware + SLM / taxonomy-embedder probe")
@@ -115,15 +119,15 @@ def main(argv: list[str] | None = None) -> int:
     dash.add_argument("--report", required=True)
     dash.add_argument("--out", default="codeevolve_dashboard.html")
 
-    ev = sub.add_parser("evaluate", help="Run evaluation (synthetic + public-repo scorecard)")
+    ev = sub.add_parser("evaluate", help="Run evaluation (synthetic + taxonomy gold + public scorecard)")
     ev.add_argument("--work-dir", default=None, help="Scratch dir for fixtures (default .codeevolve_eval)")
     ev.add_argument("--out", default=None, help="Write evaluation JSON")
     ev.add_argument("--md-out", default=None, help="Write evaluation markdown")
     ev.add_argument(
         "--suite",
         default="all",
-        choices=["synthetic", "public", "all"],
-        help="synthetic fixtures, public GitHub scorecard, or both (default all)",
+        choices=["synthetic", "public", "taxonomy", "all"],
+        help="synthetic | taxonomy gold/RAG | public scorecard | all (default)",
     )
     ev.add_argument(
         "--offline",
@@ -159,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
                 "suite": report.suite,
                 "overall_score": report.overall_score,
                 "synthetic_score": report.synthetic_score,
+                "taxonomy_score": report.taxonomy_score,
                 "public_score": report.public_score,
                 "public_skipped": report.public_skipped,
                 "passed_cases": report.passed_cases,
@@ -168,10 +173,11 @@ def main(argv: list[str] | None = None) -> int:
                 ],
             }
         )
-        # Pass if synthetic (when present) is healthy; public may be skipped offline
+        # Pass if present suites meet floors; public may be skipped offline
         synth_ok = report.synthetic_score is None or report.synthetic_score >= 0.7
+        tax_ok = report.taxonomy_score is None or report.taxonomy_score >= 0.7
         public_ok = report.public_score is None or report.public_score >= 0.55
-        return 0 if (synth_ok and public_ok and report.overall_score >= 0.55) else 1
+        return 0 if (synth_ok and tax_ok and public_ok and report.overall_score >= 0.55) else 1
 
     if args.cmd == "tiers":
         _print({k: v.to_dict() for k, v in TIERS.items()})
@@ -256,6 +262,7 @@ def main(argv: list[str] | None = None) -> int:
             peer_repos=args.peer_repo or None,
             guide_taxonomy=not args.no_taxonomy_guide,
             include_semantic=not args.no_semantic,
+            include_rag=not args.no_rag,
             vector_backend=args.vector_backend,
             previous_report=args.previous,
             ensure_slm=not args.no_ensure_slm,
@@ -303,6 +310,8 @@ def main(argv: list[str] | None = None) -> int:
                 "hypotheses": (report.hypothesis_panel.to_dict().get("counts") if report.hypothesis_panel else None),
                 "semantic_backend": (report.taxonomy.semantic or {}).get("backend") if report.taxonomy.semantic else None,
                 "word2vec_engine": (report.taxonomy.word2vec or {}).get("engine") if report.taxonomy.word2vec else None,
+                "rag": report.taxonomy.rag,
+                "taxonomy_engine": (report.taxonomy.guidance or {}).get("engine"),
                 "diff": bool(report.diff),
             }
         )
@@ -321,7 +330,7 @@ def main(argv: list[str] | None = None) -> int:
         include_clones=args.cmd in {"clones", "report", "risk"},
         include_reticulation=args.cmd in {"report"},
         include_fork_lineage=args.cmd in {"report"},
-        include_semantic=args.cmd in {"taxonomy", "word2vec", "semantic-taxonomy", "report"},
+        include_semantic=args.cmd in {"taxonomy", "word2vec", "semantic-taxonomy", "report", "hierarchy"},
         ensure_slm=False,
     )
 
@@ -335,6 +344,24 @@ def main(argv: list[str] | None = None) -> int:
         _print(report.semantics.to_dict())
     elif args.cmd == "taxonomy":
         _print(report.taxonomy.to_dict())
+    elif args.cmd == "hierarchy":
+        ht = report.hierarchy_trends
+        md_out = getattr(args, "md_out", None)
+        if ht and md_out:
+            Path(md_out).write_text(ht.markdown, encoding="utf-8")
+            print(ht.markdown)
+        elif ht:
+            print(ht.markdown)
+        else:
+            _print({})
+    elif args.cmd == "keyword-taxonomy":
+        kw = report.taxonomy.keyword_taxonomy
+        if kw:
+            print(kw.to_dict().get("ascii_tree") or "")
+            print()
+            _print({k: v for k, v in kw.to_dict().items() if k != "ascii_tree"})
+        else:
+            _print({})
     elif args.cmd == "word2vec":
         _print(report.taxonomy.word2vec or {})
     elif args.cmd == "semantic-taxonomy":

@@ -72,7 +72,8 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 
 | Signal | Meaning |
 |--------|---------|
-| **Taxonomy / clades** | Path layers + co-change clusters; every delta allocated to a clade |
+| **Taxonomy / clades** | Keyword type hierarchy + co-change clusters; every delta allocated to a clade |
+| **Build hierarchy** | Deep nested “what was built” tree + ecological trend narratives |
 | **Genetics** | File lineage, fitness, gene flow, HGT suspects |
 | **Ecology** | Global + per-clade stages; Lehman law proxies |
 | **Revert / stability / deps / momentum** | Core change-rate metrics |
@@ -88,7 +89,12 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 - [Metrics](docs/METRICS.md)
 - [Cloud / HF Qwen](docs/CLOUD.md)
 
-**0.10** upgrades **eval credibility**: synthetic fixtures **plus a public-repo scorecard** (smoke on real tags + before/after directional checks on Click/Flask) — see [docs/EVAL.md](docs/EVAL.md). **0.9** MiniLM taxonomy; earlier SLM/CI/coupling remain.
+**0.12** closes credibility gaps: **SLM + RAG taxonomy**, deep keyword hierarchies, falsifiable next-experiments, and a **taxonomy gold** eval suite (`evaluate --suite taxonomy`) — see [docs/RAG.md](docs/RAG.md), [docs/HIERARCHY.md](docs/HIERARCHY.md), [docs/EVAL.md](docs/EVAL.md).
+
+```powershell
+python -m codeevolve --repo . hierarchy --md-out built_trends.md
+python -m codeevolve --repo . keyword-taxonomy
+```
 
 ```powershell
 # Diff + dashboard + PR comment + CI gate

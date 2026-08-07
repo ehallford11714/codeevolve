@@ -99,6 +99,34 @@ def _template(ctx: dict[str, Any]) -> str:
             "",
             clade_lines,
             "",
+            "## What was built (deep type hierarchy)",
+            ((t.get("keyword_taxonomy") or {}).get("summary") or "_keyword taxonomy n/a_"),
+            "```",
+            ((ctx.get("hierarchy_trends") or {}).get("ascii_tree")
+             or (t.get("keyword_taxonomy") or {}).get("ascii_tree")
+             or "(empty)"),
+            "```",
+            "",
+            ((ctx.get("hierarchy_trends") or {}).get("built_narrative") or ""),
+            "",
+            "### Ecological trends on typed branches",
+            ((ctx.get("hierarchy_trends") or {}).get("ecology_narrative") or "_n/a_"),
+            "",
+            ((ctx.get("hierarchy_trends") or {}).get("lehman_narrative") or ""),
+            "",
+            "\n".join(
+                f"- {b.get('narrative')}"
+                for b in ((ctx.get("hierarchy_trends") or {}).get("branch_trends") or [])[:12]
+            )
+            or "- No branch trends.",
+            "",
+            "### Next experiments (falsifiable)",
+            "\n".join(
+                f"- **{e.get('id')}**: {e.get('claim')} — falsifier: {e.get('falsifier')}"
+                for e in ((ctx.get("hierarchy_trends") or {}).get("next_experiments") or [])[:8]
+            )
+            or "- None proposed.",
+            "",
             "### Word2Vec / semantic niches",
             ((t.get("word2vec") or {}).get("summary") or "_word2vec n/a_"),
             ((t.get("semantic") or {}).get("summary") or "_semantic taxonomy n/a_"),

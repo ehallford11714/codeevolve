@@ -12,6 +12,7 @@ from codeevolve.complexity import enrich_hotspots
 from codeevolve.dashboard import write_dashboard
 from codeevolve.debt import DebtReport, analyze_debt
 from codeevolve.ecology import EcologyReport, analyze_ecology
+from codeevolve.ecology.hierarchy_trends import HierarchyTrendReport, analyze_hierarchy_trends
 from codeevolve.eval.confidence import SignalConfidenceReport, score_signal_confidence
 from codeevolve.eval.hypothesis import HypothesisPanel, build_hypothesis_panel
 from codeevolve.genetics import GeneticsReport, analyze_genetics
@@ -59,6 +60,7 @@ class EvolveReport:
     genetics: GeneticsReport
     ecology: EcologyReport
     risk: RiskReport
+    hierarchy_trends: Optional[HierarchyTrendReport] = None
     symbols: Optional[SymbolReport] = None
     selection: Optional[SelectionPressure] = None
     fatigue: Optional[FatigueReport] = None
@@ -103,6 +105,7 @@ class EvolveReport:
             "reticulation": self.reticulation.to_dict() if self.reticulation else None,
             "drift": self.drift.to_dict() if self.drift else None,
             "ecology": self.ecology.to_dict(),
+            "hierarchy_trends": self.hierarchy_trends.to_dict() if self.hierarchy_trends else None,
             "debt": self.debt.to_dict(),
             "risk": self.risk.to_dict(),
             "coupling": self.coupling.to_dict() if self.coupling else None,
@@ -174,6 +177,7 @@ class CodeEvolve:
         max_symbol_files: int = 400,
         guide_taxonomy: bool = True,
         include_semantic: bool = True,
+        include_rag: bool = True,
         vector_backend: str | None = None,
         previous_report: Path | str | None = None,
         ensure_slm: bool = True,
@@ -181,7 +185,7 @@ class CodeEvolve:
     ) -> EvolveReport:
         apply_tier_env(self.model_tier, model_override=self.model_override)
         if ensure_slm and self.model_tier in {"slm", "standard"}:
-            ensure_default_slm()
+            ensure_default_slm(download=None)
 
         if use_llm is None:
             use_llm = self.model_tier
@@ -199,11 +203,13 @@ class CodeEvolve:
             model_override=self.model_override,
             guide=guide_taxonomy,
             include_semantic=include_semantic,
+            include_rag=include_rag,
             vector_backend=vector_backend,
             display=self.display,
         )
         genetics = analyze_genetics(commits, taxonomy)
         ecology = analyze_ecology(commits, metrics, taxonomy)
+        hierarchy_trends = analyze_hierarchy_trends(commits, taxonomy, ecology)
         symbols = extract_symbols(self.repo, max_files=max_symbol_files) if include_symbols else None
         drift = analyze_drift(commits, taxonomy, symbols=symbols)
         fatigue = analyze_fatigue(commits)
@@ -299,6 +305,7 @@ class CodeEvolve:
             "reticulation": reticulation.to_dict() if reticulation else None,
             "drift": drift.to_dict(),
             "ecology": ecology.to_dict(),
+            "hierarchy_trends": hierarchy_trends.to_dict(),
             "debt": debt.to_dict(),
             "risk": risk.to_dict(),
             "coupling": coupling.to_dict(),
@@ -350,6 +357,7 @@ class CodeEvolve:
             taxonomy=taxonomy,
             genetics=genetics,
             ecology=ecology,
+            hierarchy_trends=hierarchy_trends,
             risk=risk,
             symbols=symbols,
             selection=selection,
@@ -401,10 +409,10 @@ class CodeEvolve:
         offline: bool = False,
         public_case_ids: list[str] | None = None,
     ):
-        """Run evaluation suite (synthetic fixtures + optional public scorecard)."""
+        """Run evaluation suite (synthetic + taxonomy gold/RAG + public scorecard)."""
         from codeevolve.eval.runner import Suite, run_evaluation
 
-        s: Suite = suite if suite in {"synthetic", "public", "all"} else "all"  # type: ignore[assignment]
+        s: Suite = suite if suite in {"synthetic", "public", "taxonomy", "all"} else "all"  # type: ignore[assignment]
         return run_evaluation(
             work_dir,
             suite=s,

@@ -7,7 +7,8 @@ CodeEvolve treats evolutionary “laws” and ecological stages as **hypotheses*
 1. **Hypothesis panel** — `support | weak | contradict | insufficient` + confidence  
 2. **Signal confidence** — hero ranking (coupling · churn×complexity · offboarding)  
 3. **Synthetic fixtures** — planted ground truth (detection agreement)  
-4. **Public-repo scorecard** — real GitHub tags; smoke + before/after directional checks  
+4. **Taxonomy gold + RAG** — path→type_path prefixes + RAG index/typed clades/engine meta  
+5. **Public-repo scorecard** — real GitHub tags; smoke + before/after directional checks  
 
 ## Run evaluation
 
@@ -16,11 +17,18 @@ $env:CODEEVOLVE_SKIP_HF="1"
 $env:CODEEVOLVE_TAXONOMY_HEURISTIC="1"
 $env:CODEEVOLVE_SKIP_EMBED="1"
 
-# Default: synthetic + public (public skips cleanly if offline / no cache)
+# Default: synthetic + taxonomy gold + public
 python -m codeevolve evaluate --md-out eval.md --out eval.json
 
 # Fixtures only (CI-friendly)
 python -m codeevolve evaluate --suite synthetic
+
+# Taxonomy type gold + RAG pipeline
+python -m codeevolve evaluate --suite taxonomy
+
+# Require real SLM+RAG engine
+$env:CODEEVOLVE_LIVE_SLM = "1"
+python -m codeevolve evaluate --suite taxonomy
 
 # Public scorecard (clones into ~/.codeevolve/repos)
 python -m codeevolve evaluate --suite public --md-out public.md
@@ -32,9 +40,9 @@ python -m codeevolve evaluate --suite all --offline
 python -m codeevolve evaluate --suite public --public-case click_smoke_8.4.0
 ```
 
-Exit code `0` when synthetic ≥ 0.70 (if run), public ≥ 0.55 (if any public cases ran), and combined ≥ 0.55.
+Exit code `0` when synthetic ≥ 0.70 (if run), taxonomy ≥ 0.70 (if run), public ≥ 0.55 (if any public cases ran), and combined ≥ 0.55.
 
-Combined overall when both run: **0.45·synthetic + 0.55·public**.
+Combined overall when all three run: **0.40·taxonomy + 0.35·public + 0.25·synthetic**.
 
 ### Synthetic fixtures
 
@@ -45,6 +53,13 @@ Combined overall when both run: **0.45·synthetic + 0.55·public**.
 | `stable_mature` | multi-author modest churn | stability band |
 | `debt_disaster` | FIXME + revert | hotspot + revert surface |
 | `decouple_before_after` | coupled → isolated | coupling weight drops |
+
+### Taxonomy gold + RAG
+
+| Case | What it proves |
+|------|----------------|
+| `taxonomy_type_gold` | Path → type_path prefix agreement on curated paths (≥75% required in tests) |
+| `taxonomy_rag_pipeline` | Chunk index, typed clades, guidance RAG meta; with `CODEEVOLVE_LIVE_SLM=1` requires `hf-slm-rag` |
 
 ### Public scorecard cases
 

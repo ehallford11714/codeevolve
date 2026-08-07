@@ -171,6 +171,7 @@ def _analyze_at(repo: Path, *, rev: str, max_commits: int) -> dict[str, Any]:
             include_fork_lineage=False,
             guide_taxonomy=False,
             include_semantic=False,
+            include_rag=False,
             include_refactor=True,
         )
         return report.to_dict()
