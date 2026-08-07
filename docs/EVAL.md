@@ -67,18 +67,21 @@ Combined overall when suites run: **0.25·taxonomy + 0.25·ecology + 0.20·dynam
 
 See [ECOLOGY.md](ECOLOGY.md). Planted regimes → changepoints; event hints; fixture calibration.
 
-### Dynamics + deliberation provenance
+### Dynamics + deliberation provenance (real tags only)
 
-**Rationale:** without an eval suite, trajectory/pack/schema drift silently breaks agents.
+**Rationale:** trajectory claims must stay honest on public release history — **no synthetic commits** in this suite. Missing clones skip (do not fail), same as the public scorecard.
 
-| Case | What it proves |
-|------|----------------|
-| `dynamics_state_trajectory` | Enough monthly samples; z-scored coordinates present |
-| `dynamics_impulse_basins` | Impulse responses + basins on planted events/segments |
-| `dynamics_ledger_schema` | Ledger has state/blast/symbol/CST kinds; pack validates JSON Schema; risk frame links blast |
+| Case | Repo@ref | What it proves |
+|------|----------|----------------|
+| `click_trajectory_8.4.0` | pallets/click@8.4.0 | Real months + trajectory records + pack schema + frames |
+| `flask_major_impulse_3.0.0` | pallets/flask@3.0.0 | Lifecycle/release events + impulse responses after major era |
+| `requests_basin_2.31.0` | psf/requests@v2.31.0 | Basin/stage frames + path pack on a hot path |
 
 ```powershell
 python -m codeevolve evaluate --suite dynamics --md-out eval_dynamics.md
+# Demo walkthrough:
+python examples/demo_dynamics.py
+# See docs/DEMO_DYNAMICS.md
 ```
 
 ### Public scorecard cases

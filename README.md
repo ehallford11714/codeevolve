@@ -90,6 +90,7 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 - [Architecture](docs/ARCHITECTURE.md) — pipeline and package map
 - [Provenance / deliberation](docs/PROVENANCE.md) — ledger, frames, MCP/schema
 - [Dynamics](docs/DYNAMICS.md) — state trajectory rationale (FEAST-aligned)
+- [Dynamics demo](docs/DEMO_DYNAMICS.md) — real-tag walkthrough (`examples/demo_dynamics.py`)
 - [Ecology](docs/ECOLOGY.md) — event/changepoint stage calibration
 - [Evaluation](docs/EVAL.md) — synthetic / taxonomy / ecology / dynamics / public
 - [Metrics](docs/METRICS.md)
@@ -102,6 +103,7 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 python -m codeevolve --repo . provenance --pack --frame frame:basin
 python -m codeevolve provenance --schema-out schemas
 python -m codeevolve evaluate --suite dynamics
+python examples/demo_dynamics.py
 python -m codeevolve --repo . analyze --previous report.prev.json --out report.json
 ```
 

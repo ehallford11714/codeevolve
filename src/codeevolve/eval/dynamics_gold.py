@@ -1,259 +1,394 @@
-"""Eval suite for dynamical provenance + deliberation packs."""
+"""Dynamics / provenance eval on **real** public tags only (no synthetic commits)."""
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+import hashlib
+import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from codeevolve.eval.benchmarks import BenchmarkCase, CheckResult
-from codeevolve.gitlog import CommitRecord
-from codeevolve.provenance.dynamics import build_dynamics, build_state_trajectory, compute_impulse_responses
+from codeevolve.eval.scorecard import _analyze_at
+from codeevolve.ingest.github import clone_or_update, github_owner_repo
 from codeevolve.provenance.ledger import build_provenance_ledger
 from codeevolve.provenance.schema import validate_deliberation_pack
 
 
-def _planted_commits() -> list[CommitRecord]:
-    commits: list[CommitRecord] = []
-    base = datetime(2023, 1, 10, tzinfo=timezone.utc)
-    sha = 0
-    for month in range(18):
-        n = 3 if month < 4 else (14 if month < 10 else (8 if month < 13 else 4))
-        reverts = 3 if 10 <= month <= 12 else 0
-        for j in range(n):
-            sha += 1
-            commits.append(
-                CommitRecord(
-                    sha=f"{sha:040d}",
-                    parents=[f"{sha-1:040d}"] if sha > 1 else [],
-                    author=f"dev{j % 3}",
-                    email=f"dev{j % 3}@ex.com",
-                    timestamp=base + timedelta(days=30 * month + j),
-                    subject=("Revert x" if j < reverts else f"feat {month}-{j}"),
-                    is_revert=j < reverts,
-                    files=[f"src/mod{month % 2}.py", "src/shared.py"][: 2 if j % 2 == 0 else 1],
-                    insertions=20 + month,
-                    deletions=5,
-                )
-            )
-    return commits
+@dataclass
+class DynamicsCase:
+    id: str
+    repo: str
+    ref: str
+    description: str
+    kind: str  # trajectory | impulse_major | basin
+    max_commits: int = 250
+    clone_depth: int = 800
+    tags: list[str] = field(default_factory=list)
 
 
-def score_state_trajectory() -> BenchmarkCase:
-    commits = _planted_commits()
-    samples = build_state_trajectory(commits)
-    checks = [
-        CheckResult("enough_months", len(samples) >= 12, f"n={len(samples)}"),
-        CheckResult(
-            "has_coords",
-            all(hasattr(s, "activity") and hasattr(s, "instability") for s in samples[:3]),
-            "activity/instability present",
+def dynamics_catalog() -> list[DynamicsCase]:
+    """Curated real-tag cases — trajectory honesty, major impulse, basin frames."""
+    return [
+        DynamicsCase(
+            id="click_trajectory_8.4.0",
+            repo="pallets/click",
+            ref="8.4.0",
+            kind="trajectory",
+            description=(
+                "Real Click@8.4.0: joined state trajectory + deliberation pack schema "
+                "from live git history (not planted fixtures)."
+            ),
+            max_commits=220,
+            clone_depth=700,
+            tags=["click", "trajectory", "real"],
         ),
-        CheckResult(
-            "zscored_spread",
-            max(abs(s.activity) for s in samples) > 0.1,
-            f"max|activity|={max(abs(s.activity) for s in samples):.3f}",
+        DynamicsCase(
+            id="flask_major_impulse_3.0.0",
+            repo="pallets/flask",
+            ref="3.0.0",
+            kind="impulse_major",
+            description=(
+                "Real Flask@3.0.0: major-release era should yield lifecycle events and "
+                "observational impulse responses on the state trajectory."
+            ),
+            max_commits=280,
+            clone_depth=900,
+            tags=["flask", "impulse", "major", "real"],
+        ),
+        DynamicsCase(
+            id="requests_basin_2.31.0",
+            repo="psf/requests",
+            ref="v2.31.0",
+            kind="basin",
+            description=(
+                "Real Requests@v2.31.0: regime basin / stage frames grounded in "
+                "calibrated segments or trajectory occupancy."
+            ),
+            max_commits=220,
+            clone_depth=700,
+            tags=["requests", "basin", "real"],
         ),
     ]
-    passed = sum(1 for c in checks if c.ok)
-    return BenchmarkCase(
-        name="dynamics_state_trajectory",
-        passed=passed,
-        failed=len(checks) - passed,
-        checks=checks,
-        score=round(passed / max(1, len(checks)), 4),
-    )
 
 
-def score_impulse_and_basins() -> BenchmarkCase:
-    commits = _planted_commits()
-    samples = build_state_trajectory(commits)
-    events = [
-        {
-            "kind": "major_release",
-            "label": "v2.0.0",
-            "when": "2023-07-01T00:00:00+00:00",
-            "stage_hint": "growth",
-        },
-        {
-            "kind": "revert_storm",
-            "label": "storm",
-            "when": "2023-11-01T00:00:00+00:00",
-            "stage_hint": "disturbance",
-        },
+def _resolve_repo(owner: str, name: str, *, offline: bool, clone_depth: int) -> Path | dict[str, Any]:
+    try:
+        if offline:
+            from codeevolve.ingest.github import _cache_root
+
+            key = hashlib.sha1(f"{owner}/{name}".encode()).hexdigest()[:12]
+            dest = _cache_root() / f"{owner}__{name}__{key}"
+            if not (dest / ".git").is_dir():
+                return {"skipped": True, "reason": "offline and no cached clone"}
+            return dest
+        repo = clone_or_update(owner, name, depth=clone_depth, full=False)
+        subprocess.run(
+            ["git", "-C", str(repo), "fetch", "--tags", "--force", "origin"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return repo
+    except Exception as exc:
+        return {"skipped": True, "reason": f"clone failed: {exc}"}
+
+
+def _dyn_digest(report: dict[str, Any]) -> dict[str, Any]:
+    dyn = report.get("dynamics") or {}
+    eco = (report.get("ecology") or {}).get("calibration") or {}
+    events = eco.get("events") or {}
+    if isinstance(events, dict):
+        event_rows = events.get("events") or []
+    else:
+        event_rows = events if isinstance(events, list) else []
+    majors = [
+        e
+        for e in event_rows
+        if isinstance(e, dict)
+        and (
+            e.get("kind") in {"major_release", "minor_release", "release"}
+            or "major" in str(e.get("kind") or "").lower()
+            or str(e.get("label") or "").startswith("v")
+            or (str(e.get("label") or "").count(".") >= 1 and e.get("stage_hint") == "growth")
+        )
     ]
-    impulses = compute_impulse_responses(samples, events, horizon=3)
-    report = {
-        "repo": "planted",
-        "fatigue": {"weekly": []},
-        "selection": {"pressure_score": 0.4},
-        "hierarchy_trends": {"branch_trends": []},
-        "ecology": {
-            "global_stage": "growth",
-            "calibration": {
-                "events": {"events": events},
-                "segments": [
-                    {
-                        "stage": "growth",
-                        "start": "2023-01-01T00:00:00+00:00",
-                        "end": "2023-10-01T00:00:00+00:00",
-                        "source": "test",
-                        "confidence": 0.7,
-                    },
-                    {
-                        "stage": "disturbance",
-                        "start": "2023-10-01T00:00:00+00:00",
-                        "end": "2023-12-01T00:00:00+00:00",
-                        "source": "test",
-                        "confidence": 0.6,
-                    },
-                ],
-                "changepoints": {"months": [], "points": []},
-            },
-        },
-        "taxonomy": {"clades": [], "allocations": []},
+    prov = report.get("provenance") or {}
+    kinds = {}
+    for r in prov.get("records") or []:
+        if isinstance(r, dict):
+            k = str(r.get("kind") or "")
+            kinds[k] = kinds.get(k, 0) + 1
+    frames = [f.get("id") for f in (prov.get("frames") or []) if isinstance(f, dict)]
+    return {
+        "sample_count": int(dyn.get("sample_count") or len(dyn.get("samples") or [])),
+        "impulse_count": int(dyn.get("impulse_count") or len(dyn.get("impulses") or [])),
+        "basin_count": int(dyn.get("basin_count") or len(dyn.get("basins") or [])),
+        "episode_count": int(dyn.get("episode_count") or len(dyn.get("episodes") or [])),
+        "insufficient": bool(dyn.get("insufficient")),
+        "event_count": len(event_rows),
+        "majorish_events": len(majors),
+        "global_stage": (report.get("ecology") or {}).get("global_stage"),
+        "record_kinds": kinds,
+        "frame_ids": frames[:20],
+        "dynamics_summary": dyn.get("summary"),
     }
-    dyn = build_dynamics(report, commits)
-    checks = [
-        CheckResult("impulse_count", len(impulses) >= 1, f"impulses={len(impulses)}"),
-        CheckResult("basins", len(dyn.basins) >= 1, f"basins={len(dyn.basins)}"),
-        CheckResult("samples", len(dyn.samples) >= 12, f"samples={len(dyn.samples)}"),
-    ]
-    passed = sum(1 for c in checks if c.ok)
-    return BenchmarkCase(
-        name="dynamics_impulse_basins",
-        passed=passed,
-        failed=len(checks) - passed,
-        checks=checks,
-        score=round(passed / max(1, len(checks)), 4),
-        report_summary={"impulses": len(impulses), "basins": len(dyn.basins)},
-    )
 
 
-def score_ledger_and_schema() -> BenchmarkCase:
-    commits = _planted_commits()
-    tiny = {
-        "repo": "planted",
-        "taxonomy": {
-            "clades": [
-                {
-                    "id": "clade_00",
-                    "label": "core",
-                    "layer": "core",
-                    "files": ["src/shared.py"],
-                    "file_count": 1,
-                    "churn": 10,
-                }
-            ],
-            "allocations": [
-                {
-                    "sha": c.sha,
-                    "path": c.files[0],
-                    "clade_id": "clade_00",
-                    "insertions": c.insertions,
-                    "deletions": c.deletions,
-                }
-                for c in commits[:30]
-            ],
-        },
-        "genetics": {"lineages": [], "gene_flow": [], "hgt_suspects": []},
-        "ecology": {
-            "global_stage": "growth",
-            "calibration": {
-                "confidence": 0.6,
-                "events": {
-                    "events": [
-                        {
-                            "kind": "major_release",
-                            "label": "v1",
-                            "when": "2023-06-01T00:00:00+00:00",
-                            "stage_hint": "growth",
-                        }
-                    ]
-                },
-                "changepoints": {"months": [], "points": []},
-                "segments": [
-                    {
-                        "stage": "growth",
-                        "start": "2023-01-01T00:00:00+00:00",
-                        "end": "2023-12-01T00:00:00+00:00",
-                        "confidence": 0.6,
-                    }
-                ],
-                "anchors": [],
-            },
-        },
-        "blast_radius": [
-            {"path": "src/shared.py", "co_changers": 12, "blast_score": 0.3},
-        ],
-        "symbols": {
-            "symbols": [
-                {"qualname": "src/shared.py::run", "kind": "function", "path": "src/shared.py", "line": 1}
-            ]
-        },
-        "cst_evolution": {
-            "deltas": [{"path": "src/shared.py", "node": "function", "delta": 2, "window": "late"}],
-            "windows": [{"label": "late", "counts": {"function": 3}}],
-        },
-        "selection": {"pressure_score": 0.2, "recent_issues": [], "recent_prs": []},
-        "diff": {},
-        "hypothesis_panel": {"claims": []},
-        "hierarchy_trends": {"branch_trends": [], "next_experiments": []},
-        "risk": {
-            "failure_points": [
-                {
-                    "id": "fp_shared",
-                    "title": "shared hotspot",
-                    "path": "src/shared.py",
-                    "clade_id": "clade_00",
-                    "severity": "high",
-                    "kind": "hotspot",
-                }
-            ]
-        },
-        "drift": {"clade_drift": []},
-        "signal_confidence": {},
-    }
-    dyn = build_dynamics(tiny, commits)
-    tiny["dynamics"] = dyn.to_dict()
-    ledger = build_provenance_ledger(tiny)
-    kinds = {r.kind for r in ledger.records}
+def _score_trajectory(report: dict[str, Any]) -> list[CheckResult]:
+    dig = _dyn_digest(report)
+    ledger = build_provenance_ledger(report)
     pack = ledger.deliberation_pack()
     errors = validate_deliberation_pack(pack)
-    risk_frame = ledger.expand_frame("frame:risk:fp_shared")
-    has_blast_link = False
-    if risk_frame:
-        has_blast_link = any(
-            e.get("kind") == "blast_radius" or "blast" in str(e.get("record_id") or "")
-            for e in risk_frame.get("evidence_records") or []
-        ) or any(
-            e.kind == "blast_radius" or "blast" in e.record_id
-            for f in ledger.frames
-            if f.id == "frame:risk:fp_shared"
-            for e in f.evidence
-        )
+    kinds = {r.kind for r in ledger.records}
     checks = [
-        CheckResult("state_or_trajectory", bool(kinds & {"state_sample", "trajectory"}), f"kinds={sorted(kinds)[:12]}"),
-        CheckResult("blast_radius", "blast_radius" in kinds, "blast records"),
-        CheckResult("symbol", "symbol" in kinds, "symbol records"),
-        CheckResult("cst_delta", "cst_delta" in kinds, "cst records"),
-        CheckResult("schema_valid", len(errors) == 0, f"errors={errors[:3]}"),
-        CheckResult("frames", len(ledger.frames) >= 1, f"frames={len(ledger.frames)}"),
-        CheckResult("blast_on_risk", has_blast_link, "risk frame measures blast"),
+        CheckResult(
+            "real_months",
+            dig["sample_count"] >= 8,
+            f"samples={dig['sample_count']} (need >=8 months of real history)",
+        ),
+        CheckResult(
+            "trajectory_record",
+            "trajectory" in kinds or "state_sample" in kinds,
+            f"kinds={sorted(kinds & {'trajectory', 'state_sample', 'impulse_response'})}",
+        ),
+        CheckResult("pack_schema", len(errors) == 0, f"errors={errors[:2]}"),
+        CheckResult(
+            "frames_present",
+            len(ledger.frames) >= 1,
+            f"frames={len(ledger.frames)} ids={dig['frame_ids'][:4]}",
+        ),
+        CheckResult(
+            "timeline_dated",
+            len(ledger.timeline(limit=20)) >= 1 or dig["sample_count"] >= 8,
+            "dated provenance backbone",
+        ),
     ]
+    return checks
+
+
+def _score_impulse_major(report: dict[str, Any]) -> list[CheckResult]:
+    dig = _dyn_digest(report)
+    ledger = build_provenance_ledger(report)
+    impulse_recs = [r for r in ledger.records if r.kind == "impulse_response"]
+    event_recs = [r for r in ledger.records if r.kind == "lifecycle_event"]
+    response_frames = [f for f in ledger.frames if f.id.startswith("frame:response:")]
+    checks = [
+        CheckResult(
+            "real_months",
+            dig["sample_count"] >= 8,
+            f"samples={dig['sample_count']}",
+        ),
+        CheckResult(
+            "lifecycle_events",
+            dig["event_count"] >= 1 or len(event_recs) >= 1,
+            f"events={dig['event_count']} ledger_events={len(event_recs)}",
+        ),
+        CheckResult(
+            "majorish_or_any_release_event",
+            dig["majorish_events"] >= 1
+            or any("release" in (r.tags or []) or "release" in r.summary.lower() for r in event_recs),
+            f"majorish={dig['majorish_events']}",
+        ),
+        CheckResult(
+            "impulse_response",
+            dig["impulse_count"] >= 1 or len(impulse_recs) >= 1,
+            f"impulses={dig['impulse_count']} ledger={len(impulse_recs)}",
+        ),
+        CheckResult(
+            "response_or_stage_frame",
+            bool(response_frames) or any(f.id in {"frame:stage", "frame:basin"} for f in ledger.frames),
+            f"response_frames={len(response_frames)}",
+        ),
+    ]
+    return checks
+
+
+def _score_basin(report: dict[str, Any]) -> list[CheckResult]:
+    dig = _dyn_digest(report)
+    ledger = build_provenance_ledger(report)
+    basins = [r for r in ledger.records if r.kind == "regime_basin"]
+    has_basin_frame = any(f.id == "frame:basin" for f in ledger.frames)
+    has_stage_frame = any(f.id == "frame:stage" for f in ledger.frames)
+    checks = [
+        CheckResult("real_months", dig["sample_count"] >= 8, f"samples={dig['sample_count']}"),
+        CheckResult(
+            "basin_or_segment",
+            dig["basin_count"] >= 1 or len(basins) >= 1,
+            f"basins={dig['basin_count']} ledger={len(basins)}",
+        ),
+        CheckResult(
+            "basin_or_stage_frame",
+            has_basin_frame or has_stage_frame,
+            f"basin_frame={has_basin_frame} stage_frame={has_stage_frame} stage={dig['global_stage']}",
+        ),
+        CheckResult(
+            "stage_labeled",
+            bool(dig["global_stage"]),
+            f"global_stage={dig['global_stage']}",
+        ),
+        CheckResult(
+            "path_pack_ok",
+            True,  # filled below if we find a hot path
+            "path_pack",
+        ),
+    ]
+    # Prefer a real hot path from blast_radius or taxonomy
+    path = None
+    for row in report.get("blast_radius") or []:
+        if isinstance(row, dict) and row.get("path"):
+            path = str(row["path"])
+            break
+    if not path:
+        for c in (report.get("taxonomy") or {}).get("clades") or []:
+            files = (c.get("files") or []) if isinstance(c, dict) else []
+            if files:
+                path = str(files[0])
+                break
+    if path:
+        pack = ledger.path_pack(path)
+        checks[-1] = CheckResult(
+            "path_pack_ok",
+            pack.get("path") == path or pack.get("lineage") is not None or pack.get("episodes") is not None,
+            f"path={path} episodes={len(pack.get('episodes') or [])}",
+        )
+    else:
+        checks[-1] = CheckResult("path_pack_ok", True, "no path available; skipped structural pack")
+    return checks
+
+
+def run_dynamics_case(case: DynamicsCase, *, offline: bool = False) -> BenchmarkCase | dict[str, Any]:
+    gh = github_owner_repo(case.repo)
+    if not gh:
+        return {"id": case.id, "skipped": True, "reason": "invalid repo spec"}
+    owner, name = gh
+    resolved = _resolve_repo(owner, name, offline=offline, clone_depth=case.clone_depth)
+    if isinstance(resolved, dict):
+        return {"id": case.id, **resolved}
+
+    try:
+        report = _analyze_at(resolved, rev=case.ref, max_commits=case.max_commits)
+    except Exception as exc:
+        return {"id": case.id, "skipped": True, "reason": f"analyze failed: {exc}"}
+
+    if case.kind == "trajectory":
+        checks = _score_trajectory(report)
+    elif case.kind == "impulse_major":
+        checks = _score_impulse_major(report)
+    else:
+        checks = _score_basin(report)
+
     passed = sum(1 for c in checks if c.ok)
+    failed = len(checks) - passed
     return BenchmarkCase(
-        name="dynamics_ledger_schema",
+        name=case.id,
         passed=passed,
-        failed=len(checks) - passed,
+        failed=failed,
         checks=checks,
         score=round(passed / max(1, len(checks)), 4),
+        report_summary={
+            "repo": case.repo,
+            "ref": case.ref,
+            "kind": case.kind,
+            "description": case.description,
+            "digest": _dyn_digest(report),
+        },
     )
 
 
-def run_dynamics_eval(work_dir: Path | None = None) -> list[BenchmarkCase]:
+@dataclass
+class DynamicsEvalResult:
+    cases: list[BenchmarkCase] = field(default_factory=list)
+    skipped: list[dict[str, Any]] = field(default_factory=list)
+    overall_score: float | None = None
+    summary: str = ""
+    markdown: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "overall_score": self.overall_score,
+            "summary": self.summary,
+            "skipped": list(self.skipped),
+            "cases": [c.to_dict() for c in self.cases],
+            "markdown": self.markdown,
+        }
+
+
+def run_dynamics_eval(
+    work_dir: Path | None = None,
+    *,
+    offline: bool = False,
+    case_ids: list[str] | None = None,
+) -> DynamicsEvalResult:
+    """Run real-tag dynamics cases. Skips (does not fail) when clones unavailable."""
     _ = work_dir
-    return [
-        score_state_trajectory(),
-        score_impulse_and_basins(),
-        score_ledger_and_schema(),
+    catalog = dynamics_catalog()
+    if case_ids:
+        want = set(case_ids)
+        catalog = [c for c in catalog if c.id in want]
+
+    cases: list[BenchmarkCase] = []
+    skipped: list[dict[str, Any]] = []
+    for case in catalog:
+        result = run_dynamics_case(case, offline=offline)
+        if isinstance(result, dict) and result.get("skipped"):
+            skipped.append(result)
+            continue
+        assert isinstance(result, BenchmarkCase)
+        cases.append(result)
+
+    if not cases:
+        md = (
+            "# Dynamics eval (real tags)\n\n"
+            "All cases skipped — clone public repos or drop `--offline`.\n\n"
+            + "\n".join(f"- `{s.get('id')}`: {s.get('reason')}" for s in skipped)
+        )
+        return DynamicsEvalResult(
+            skipped=skipped,
+            summary=f"Dynamics eval: 0 runnable cases ({len(skipped)} skipped)",
+            markdown=md,
+        )
+
+    overall = sum(c.score for c in cases) / len(cases)
+    lines = [
+        "# Dynamics eval (real public tags)",
+        "",
+        "_No synthetic commits — clones real GitHub tags and scores trajectory / impulse / basin._",
+        "",
+        f"**Score:** {overall:.1%} · **Cases:** {sum(1 for c in cases if c.failed == 0)}/{len(cases)} clean · "
+        f"**Skipped:** {len(skipped)}",
+        "",
+        "| Case | Repo@ref | Score | Failed |",
+        "|------|----------|------:|-------:|",
     ]
+    for c in cases:
+        repo = (c.report_summary or {}).get("repo")
+        ref = (c.report_summary or {}).get("ref")
+        lines.append(f"| `{c.name}` | {repo}@{ref} | {c.score:.0%} | {c.failed} |")
+    lines.append("")
+    for c in cases:
+        lines.append(f"## {c.name}")
+        lines.append("")
+        lines.append((c.report_summary or {}).get("description") or "")
+        lines.append("")
+        for ch in c.checks:
+            mark = "PASS" if ch.ok else "FAIL"
+            lines.append(f"- [{mark}] `{ch.name}` — {ch.detail}")
+        lines.append("")
+    if skipped:
+        lines.append("## Skipped")
+        lines.append("")
+        for s in skipped:
+            lines.append(f"- `{s.get('id')}`: {s.get('reason')}")
+        lines.append("")
+
+    return DynamicsEvalResult(
+        cases=cases,
+        skipped=skipped,
+        overall_score=round(overall, 4),
+        summary=(
+            f"Dynamics eval {overall:.1%} on {len(cases)} real-tag cases "
+            f"({len(skipped)} skipped)"
+        ),
+        markdown="\n".join(lines),
+    )

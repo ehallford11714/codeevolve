@@ -25,6 +25,7 @@ class EvaluationReport:
     ecology_score: float | None = None
     dynamics_score: float | None = None
     public_skipped: list[dict[str, Any]] = field(default_factory=list)
+    dynamics_skipped: list[dict[str, Any]] = field(default_factory=list)
     suite: str = "synthetic"
 
     def to_dict(self) -> dict[str, Any]:
@@ -40,6 +41,7 @@ class EvaluationReport:
             "total_cases": self.total_cases,
             "summary": self.summary,
             "public_skipped": list(self.public_skipped),
+            "dynamics_skipped": list(self.dynamics_skipped),
             "cases": [c.to_dict() for c in self.cases],
             "markdown": self.markdown,
         }
@@ -128,11 +130,16 @@ def run_evaluation(
 
     dyn_cases: list[BenchmarkCase] = []
     dyn_score = None
+    dyn_skipped: list[dict[str, Any]] = []
+    dyn_md = ""
     if suite in {"dynamics", "all"}:
         from codeevolve.eval.dynamics_gold import run_dynamics_eval
 
-        dyn_cases = run_dynamics_eval(work)
-        dyn_score = sum(c.score for c in dyn_cases) / max(1, len(dyn_cases))
+        dyn_result = run_dynamics_eval(work, offline=offline)
+        dyn_cases = dyn_result.cases
+        dyn_skipped = dyn_result.skipped
+        dyn_md = dyn_result.markdown
+        dyn_score = dyn_result.overall_score
 
     public_cases: list[BenchmarkCase] = []
     public_score = None
@@ -205,12 +212,15 @@ def run_evaluation(
             )
         )
         parts.append("")
-    if dyn_score is not None:
+    if dyn_md:
+        parts.append(dyn_md)
+        parts.append("")
+    elif dyn_score is not None:
         parts.append(
             _md_cases(
-                "Dynamics + deliberation provenance",
-                "State trajectory, impulse/basins, blast/symbol/CST ledger kinds, "
-                "and deliberation pack JSON Schema validation.",
+                "Dynamics + deliberation provenance (real tags)",
+                "Clones public tags; scores trajectory / major impulse / basin frames. "
+                "No synthetic commits.",
                 dyn_cases,
                 dyn_score,
             )
@@ -226,7 +236,8 @@ def run_evaluation(
             f"- Synthetic score: {synth_score if synth_score is not None else 'n/a'}",
             f"- Taxonomy gold/RAG: {tax_score if tax_score is not None else 'n/a'}",
             f"- Ecology calibration: {eco_score if eco_score is not None else 'n/a'}",
-            f"- Dynamics/provenance: {dyn_score if dyn_score is not None else 'n/a'}",
+            f"- Dynamics/provenance (real tags): {dyn_score if dyn_score is not None else 'n/a'} "
+            f"({len(dyn_skipped)} skipped)",
             f"- Public scorecard: {public_score if public_score is not None else 'n/a'} "
             f"({len(public_skipped)} skipped)",
             f"- Combined overall: {overall:.1%}",
@@ -234,9 +245,9 @@ def run_evaluation(
             "- Synthetic fixtures prove detectors fire on planted patterns.",
             "- Taxonomy gold proves keyword type paths + RAG pipeline attach evidence.",
             "- Ecology suite proves changepoints/events recalibrate stages (hypotheses).",
-            "- Dynamics suite proves trajectory/pack schema + micro-provenance kinds.",
+            "- Dynamics suite uses real GitHub tags only (trajectory / impulse / basin).",
             "- Public scorecard proves the tool runs on real tags with calibrated deltas.",
-            "- Skipped public cases (offline / clone failure) do not count as failures.",
+            "- Skipped public/dynamics cases (offline / clone failure) do not count as failures.",
             "",
         ]
     )
@@ -248,7 +259,7 @@ def run_evaluation(
         f"ecology={eco_score if eco_score is not None else 'n/a'}, "
         f"dynamics={dyn_score if dyn_score is not None else 'n/a'}, "
         f"public={public_score if public_score is not None else 'n/a'}, "
-        f"skipped_public={len(public_skipped)})"
+        f"skipped_public={len(public_skipped)}, skipped_dynamics={len(dyn_skipped)})"
     )
     return EvaluationReport(
         cases=cases,
@@ -263,5 +274,6 @@ def run_evaluation(
         dynamics_score=round(dyn_score, 4) if dyn_score is not None else None,
         public_score=round(public_score, 4) if public_score is not None else None,
         public_skipped=public_skipped,
+        dynamics_skipped=dyn_skipped,
         suite=suite,
     )

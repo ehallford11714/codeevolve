@@ -193,12 +193,13 @@ python -m codeevolve provenance --from-report report.json --frame frame:delta:re
 
 ```powershell
 python -m codeevolve provenance --schema-out schemas
-python -m codeevolve evaluate --suite dynamics
+python -m codeevolve evaluate --suite dynamics   # real public tags only
+python examples/demo_dynamics.py                 # Click@8.4.0 walkthrough
 # optional JSON-lines tool server:
 # python -m codeevolve.mcp.server
 ```
 
-See [EVAL.md](EVAL.md) for suite weights and floors.
+See [DEMO_DYNAMICS.md](DEMO_DYNAMICS.md) and [EVAL.md](EVAL.md).
 
 ## Related
 

@@ -223,6 +223,7 @@ def main(argv: list[str] | None = None) -> int:
                 "dynamics_score": report.dynamics_score,
                 "public_score": report.public_score,
                 "public_skipped": report.public_skipped,
+                "dynamics_skipped": report.dynamics_skipped,
                 "passed_cases": report.passed_cases,
                 "total_cases": report.total_cases,
                 "cases": [

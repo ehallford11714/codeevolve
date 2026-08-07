@@ -76,10 +76,15 @@ Allocations on a path are chunked into episodes (touch gaps).
 python -m codeevolve --repo . analyze --out report.json
 python -m codeevolve --repo . provenance --timeline
 python -m codeevolve --repo . provenance --frame frame:basin
-python -m codeevolve evaluate --suite dynamics
+
+# Real public tags only (Click / Flask / Requests) — no synthetic history
+python -m codeevolve evaluate --suite dynamics --md-out eval_dynamics.md
+
+# Interactive demo
+python examples/demo_dynamics.py
 ```
 
-`evaluate --suite dynamics` checks planted trajectories, impulses/basins, ledger kinds (incl. blast/symbol/CST), and deliberation-pack schema validity.
+`evaluate --suite dynamics` clones real GitHub tags and scores trajectory / major-era impulses / basin frames. Offline or clone failures **skip** cases. Walkthrough: [DEMO_DYNAMICS.md](DEMO_DYNAMICS.md).
 
 ## Related
 
