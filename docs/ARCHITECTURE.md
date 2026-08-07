@@ -9,13 +9,14 @@ CLI / CodeEvolve(repo|github-url)
         ├─ semantics.analyze_semantics
         ├─ taxonomy.build_taxonomy      (layers, clades, allocations)
         ├─ genetics.analyze_genetics    (lineage, gene flow, fitness)
-        ├─ ecology.analyze_ecology      (clade stages, Lehman proxies)
+        ├─ ecology.analyze_ecology      (clade stages, Lehman + Mann–Kendall)
+        ├─ coupling / clones / reticulation / CST / deps / offboarding / fork lineage
         ├─ phylogeny.analyze_phylogeny  (commit DAG + global stage)
         ├─ debt.analyze_debt
-        ├─ risk.analyze_risk            (FailurePoints)
+        ├─ risk.analyze_risk            (FailurePoints; churn×complexity hotspots)
         ├─ report.write_trend_report
         ├─ report.write_repo_report
-        ├─ refactor.build_refactor_plan
+        ├─ refactor.build_refactor_plan (SQALE-like person-days)
         └─ models.hardware / backends   (heuristic | hf-qwen | cloud)
 ```
 

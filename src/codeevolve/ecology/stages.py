@@ -8,6 +8,7 @@ from typing import Any
 
 from codeevolve.ecology.lehman import LehmanScores, compute_lehman
 from codeevolve.ecology.niches import NicheReport, analyze_niches
+from codeevolve.ecology.trends import LehmanTrendReport, analyze_lehman_trends
 from codeevolve.gitlog import CommitRecord
 from codeevolve.metrics import MetricBundle
 from codeevolve.phylogeny import EcologicalStage, analyze_phylogeny
@@ -42,6 +43,7 @@ class EcologyReport:
     lehman: LehmanScores
     niches: NicheReport
     timeline: list[dict[str, Any]] = field(default_factory=list)
+    lehman_trends: LehmanTrendReport | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -49,6 +51,7 @@ class EcologyReport:
             "stage_rationale": self.stage_rationale,
             "clade_stages": [c.to_dict() for c in self.clade_stages],
             "lehman": self.lehman.to_dict(),
+            "lehman_trends": self.lehman_trends.to_dict() if self.lehman_trends else None,
             "niches": self.niches.to_dict(),
             "timeline": list(self.timeline),
         }
@@ -135,4 +138,5 @@ def analyze_ecology(
         lehman=compute_lehman(commits, metrics),
         niches=analyze_niches(taxonomy),
         timeline=timeline,
+        lehman_trends=analyze_lehman_trends(commits, metrics),
     )

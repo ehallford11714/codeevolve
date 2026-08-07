@@ -1,6 +1,17 @@
 from codeevolve.risk.blast_radius import blast_radius_table, cochange_degrees
+from codeevolve.risk.coupling import CouplingReport, analyze_coupling
+from codeevolve.risk.dependencies import DependencyFragilityReport, analyze_dependency_fragility
 
-__all__ = ["RiskReport", "analyze_risk", "blast_radius_table", "cochange_degrees"]
+__all__ = [
+    "RiskReport",
+    "analyze_risk",
+    "blast_radius_table",
+    "cochange_degrees",
+    "CouplingReport",
+    "analyze_coupling",
+    "DependencyFragilityReport",
+    "analyze_dependency_fragility",
+]
 
 
 def __getattr__(name: str):

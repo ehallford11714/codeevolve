@@ -6,7 +6,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from codeevolve.debt import DebtReport
-from codeevolve.refactor.effort import estimate_effort, expected_fitness_gain, priority_for
+from codeevolve.refactor.effort import (
+    estimate_effort,
+    estimate_person_days,
+    expected_fitness_gain,
+    priority_for,
+)
 from codeevolve.risk.weaknesses import RiskReport
 
 
@@ -26,7 +31,8 @@ class RefactorStep:
     actions: list[str]
     acceptance_criteria: list[str]
     estimated_effort: str
-    expected_fitness_gain: float
+    estimated_person_days: float = 0.0
+    expected_fitness_gain: float = 0.0
     depends_on: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -42,6 +48,7 @@ class RefactorStep:
             "actions": list(self.actions),
             "acceptance_criteria": list(self.acceptance_criteria),
             "estimated_effort": self.estimated_effort,
+            "estimated_person_days": self.estimated_person_days,
             "expected_fitness_gain": self.expected_fitness_gain,
             "depends_on": list(self.depends_on),
         }
@@ -70,12 +77,21 @@ def _wave_for(kind: str) -> str:
     if kind in {
         "revert_surface",
         "dependency_shock",
+        "dependency_fragility",
         "selection_pressure",
         "sprint_fatigue",
         "cognitive_load",
+        "offboarding_risk",
     }:
         return "stabilize"
-    if kind in {"hotspot_blast", "bus_factor", "hotspot_gravity", "circular_risk", "utility_sink"}:
+    if kind in {
+        "hotspot_blast",
+        "bus_factor",
+        "hotspot_gravity",
+        "circular_risk",
+        "utility_sink",
+        "change_coupling",
+    }:
         return "contain"
     if kind in {"test_gap", "low_fitness"} or "debt" in kind or kind.startswith("deprec"):
         return "pay_down"
@@ -104,9 +120,13 @@ def build_refactor_plan(risk: RiskReport, debt: DebtReport, *, backend: str = "h
         if fp.kind == "test_gap":
             criteria.append("Test touch ratio rises relative to production churn")
         blast = 0.0
+        complexity = 0.0
         for ev in fp.evidence:
             if isinstance(ev, dict) and "co_changers" in ev:
                 blast = min(1.0, float(ev["co_changers"]) / 40.0)
+            if isinstance(ev, dict) and "complexity" in ev:
+                complexity = float(ev.get("complexity") or 0)
+        days = estimate_person_days(fp.severity, blast, complexity)
         steps.append(
             RefactorStep(
                 id=rid,
@@ -119,7 +139,8 @@ def build_refactor_plan(risk: RiskReport, debt: DebtReport, *, backend: str = "h
                 evidence_refs=[fp.id],
                 actions=actions,
                 acceptance_criteria=criteria,
-                estimated_effort=estimate_effort(fp.severity, blast),
+                estimated_effort=estimate_effort(fp.severity, blast, complexity),
+                estimated_person_days=days,
                 expected_fitness_gain=expected_fitness_gain(fp.severity),
             )
         )
@@ -147,6 +168,7 @@ def build_refactor_plan(risk: RiskReport, debt: DebtReport, *, backend: str = "h
                 actions=[str(m.get("why") or "Address architectural smell"), "Schedule containment refactor"],
                 acceptance_criteria=["Mistake no longer flagged at current thresholds"],
                 estimated_effort="M",
+                estimated_person_days=2.0,
                 expected_fitness_gain=0.15,
             )
         )
@@ -178,11 +200,15 @@ def build_refactor_plan(risk: RiskReport, debt: DebtReport, *, backend: str = "h
             md_lines.append("")
             continue
         for s in chunk:
-            md_lines.append(f"### {s.id} — {s.title} ({s.priority}, effort {s.estimated_effort})")
+            md_lines.append(
+                f"### {s.id} — {s.title} ({s.priority}, effort {s.estimated_effort}, "
+                f"~{s.estimated_person_days}d)"
+            )
             md_lines.append(f"- Problem: `{s.problem_kind}`")
             md_lines.append(f"- Evidence: {', '.join(s.evidence_refs)}")
             if s.paths:
                 md_lines.append(f"- Paths: {', '.join(s.paths[:5])}")
+            md_lines.append(f"- Remediation person-days: {s.estimated_person_days}")
             md_lines.append(f"- Expected fitness gain: {s.expected_fitness_gain}")
             if s.depends_on:
                 md_lines.append(f"- Depends on: {', '.join(s.depends_on)}")

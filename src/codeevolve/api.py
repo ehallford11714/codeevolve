@@ -8,13 +8,17 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 from codeevolve.ci import CiGateResult, evaluate_ci_gate
+from codeevolve.complexity import enrich_hotspots
 from codeevolve.dashboard import write_dashboard
 from codeevolve.debt import DebtReport, analyze_debt
 from codeevolve.ecology import EcologyReport, analyze_ecology
 from codeevolve.genetics import GeneticsReport, analyze_genetics
+from codeevolve.genetics.clones import CloneGenealogyReport, analyze_clone_genealogy
 from codeevolve.genetics.drift import DriftReport, analyze_drift
+from codeevolve.genetics.reticulation import ReticulationReport, analyze_reticulation
 from codeevolve.gitlog import CommitRecord, load_commits
 from codeevolve.ingest import resolve_repo
+from codeevolve.ingest.fork_lineage import ForkLineageReport, analyze_fork_lineage
 from codeevolve.ingest.github import github_owner_repo
 from codeevolve.ingest.github_api import SelectionPressure, fetch_selection_pressure
 from codeevolve.metrics import MetricBundle, change_rate_timeline, compute_metrics
@@ -26,14 +30,18 @@ from codeevolve.models.tiers import apply_tier_env, resolve_tier, tier_spec
 from codeevolve.phylogeny import PhylogenyReport, analyze_phylogeny
 from codeevolve.pr_comment import render_pr_comment
 from codeevolve.psychology import CognitiveLoadReport, FatigueReport, analyze_cognitive_load, analyze_fatigue
+from codeevolve.psychology.offboarding import OffboardingReport, simulate_offboarding
 from codeevolve.psychology.sprints import SprintReport, analyze_sprints
 from codeevolve.refactor import RefactorPlan, build_refactor_plan
 from codeevolve.report import RepoReportDoc, TrendReport, write_repo_report, write_trend_report
 from codeevolve.report.diff import ReportDiff, diff_reports, load_previous
 from codeevolve.risk import RiskReport, analyze_risk
 from codeevolve.risk.blast_radius import blast_radius_table
+from codeevolve.risk.coupling import CouplingReport, analyze_coupling
+from codeevolve.risk.dependencies import DependencyFragilityReport, analyze_dependency_fragility
 from codeevolve.semantics import SemanticReport, analyze_semantics
 from codeevolve.taxonomy import TaxonomyReport, build_taxonomy
+from codeevolve.taxonomy.cst import CstEvolutionReport, analyze_cst_evolution
 from codeevolve.taxonomy.symbols import SymbolReport, extract_symbols
 
 
@@ -57,6 +65,13 @@ class EvolveReport:
     stability: Optional[StabilityBundle] = None
     sprints: Optional[SprintReport] = None
     diff: Optional[ReportDiff] = None
+    coupling: Optional[CouplingReport] = None
+    clones: Optional[CloneGenealogyReport] = None
+    reticulation: Optional[ReticulationReport] = None
+    cst_evolution: Optional[CstEvolutionReport] = None
+    dependencies: Optional[DependencyFragilityReport] = None
+    offboarding: Optional[OffboardingReport] = None
+    fork_lineage: Optional[ForkLineageReport] = None
     model_tier: str = "slm"
     blast_radius: list[dict[str, Any]] = field(default_factory=list)
     change_timeline: list[dict[str, Any]] = field(default_factory=list)
@@ -78,11 +93,18 @@ class EvolveReport:
             "phylogeny": self.phylogeny.to_dict(),
             "taxonomy": self.taxonomy.to_dict(),
             "symbols": self.symbols.to_dict() if self.symbols else None,
+            "cst_evolution": self.cst_evolution.to_dict() if self.cst_evolution else None,
             "genetics": self.genetics.to_dict(),
+            "clones": self.clones.to_dict() if self.clones else None,
+            "reticulation": self.reticulation.to_dict() if self.reticulation else None,
             "drift": self.drift.to_dict() if self.drift else None,
             "ecology": self.ecology.to_dict(),
             "debt": self.debt.to_dict(),
             "risk": self.risk.to_dict(),
+            "coupling": self.coupling.to_dict() if self.coupling else None,
+            "dependencies": self.dependencies.to_dict() if self.dependencies else None,
+            "offboarding": self.offboarding.to_dict() if self.offboarding else None,
+            "fork_lineage": self.fork_lineage.to_dict() if self.fork_lineage else None,
             "selection": self.selection.to_dict() if self.selection else None,
             "fatigue": self.fatigue.to_dict() if self.fatigue else None,
             "cognitive_load": self.cognitive_load.to_dict() if self.cognitive_load else None,
@@ -138,6 +160,11 @@ class CodeEvolve:
         include_hardware: bool = True,
         include_symbols: bool = True,
         include_selection: bool = True,
+        include_cst: bool = True,
+        include_clones: bool = True,
+        include_reticulation: bool = True,
+        include_fork_lineage: bool = True,
+        peer_repos: list[Path | str] | None = None,
         max_symbol_files: int = 400,
         guide_taxonomy: bool = True,
         previous_report: Path | str | None = None,
@@ -152,6 +179,8 @@ class CodeEvolve:
 
         commits = load_commits(self.repo, max_commits=max_commits, since=since)
         metrics = compute_metrics(commits)
+        metrics.hot_files = enrich_hotspots(self.repo, metrics.hot_files)
+
         semantics = analyze_semantics(commits)
         phylogeny = analyze_phylogeny(commits, metrics)
         taxonomy = build_taxonomy(
@@ -175,6 +204,16 @@ class CodeEvolve:
             max_files=scan_debt_files,
         )
 
+        coupling = analyze_coupling(commits)
+        dependencies = analyze_dependency_fragility(self.repo, commits)
+        offboarding = simulate_offboarding(commits, metrics)
+        clones = analyze_clone_genealogy(self.repo, commits) if include_clones else None
+        reticulation = analyze_reticulation(self.repo, commits) if include_reticulation else None
+        cst = analyze_cst_evolution(self.repo, commits) if include_cst else None
+        fork_lineage = (
+            analyze_fork_lineage(self.repo, peer_repos=peer_repos) if include_fork_lineage else None
+        )
+
         # Selection ON by default for GitHub URLs
         selection = None
         if include_selection and self._gh is not None:
@@ -195,23 +234,33 @@ class CodeEvolve:
             selection=selection,
             fatigue=fatigue,
             cognitive_load=load,
+            coupling=coupling,
+            dependencies=dependencies,
+            offboarding=offboarding,
         )
         blast = blast_radius_table(commits)
         timeline = change_rate_timeline(commits)
 
         prev = load_previous(previous_report) if previous_report else None
-        diff = diff_reports(
-            {
-                "stability": stability.to_dict(),
-                "metrics": metrics.to_dict(),
-                "debt": debt.to_dict(),
-                "fatigue": fatigue.to_dict(),
-                "cognitive_load": load.to_dict(),
-                "drift": drift.to_dict(),
-                "risk": risk.to_dict(),
-            },
-            prev,
-        ) if prev else None
+        diff = (
+            diff_reports(
+                {
+                    "stability": stability.to_dict(),
+                    "metrics": metrics.to_dict(),
+                    "debt": debt.to_dict(),
+                    "fatigue": fatigue.to_dict(),
+                    "cognitive_load": load.to_dict(),
+                    "drift": drift.to_dict(),
+                    "risk": risk.to_dict(),
+                    "dependencies": dependencies.to_dict(),
+                    "offboarding": offboarding.to_dict(),
+                    "coupling": coupling.to_dict(),
+                },
+                prev,
+            )
+            if prev
+            else None
+        )
 
         ctx = {
             "repo": self.display,
@@ -223,11 +272,18 @@ class CodeEvolve:
             "phylogeny": phylogeny.to_dict(),
             "taxonomy": taxonomy.to_dict(),
             "symbols": symbols.to_dict() if symbols else None,
+            "cst_evolution": cst.to_dict() if cst else None,
             "genetics": genetics.to_dict(),
+            "clones": clones.to_dict() if clones else None,
+            "reticulation": reticulation.to_dict() if reticulation else None,
             "drift": drift.to_dict(),
             "ecology": ecology.to_dict(),
             "debt": debt.to_dict(),
             "risk": risk.to_dict(),
+            "coupling": coupling.to_dict(),
+            "dependencies": dependencies.to_dict(),
+            "offboarding": offboarding.to_dict(),
+            "fork_lineage": fork_lineage.to_dict() if fork_lineage else None,
             "selection": selection.to_dict() if selection else None,
             "fatigue": fatigue.to_dict(),
             "cognitive_load": load.to_dict(),
@@ -280,6 +336,13 @@ class CodeEvolve:
             stability=stability,
             sprints=sprints,
             diff=diff,
+            coupling=coupling,
+            clones=clones,
+            reticulation=reticulation,
+            cst_evolution=cst,
+            dependencies=dependencies,
+            offboarding=offboarding,
+            fork_lineage=fork_lineage,
             model_tier=self.model_tier,
             blast_radius=blast,
             change_timeline=timeline,

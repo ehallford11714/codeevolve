@@ -1,4 +1,5 @@
 from codeevolve.psychology.load import CognitiveLoadReport, analyze_cognitive_load
+from codeevolve.psychology.offboarding import OffboardingReport, simulate_offboarding
 from codeevolve.psychology.rhythm import FatigueReport, analyze_fatigue
 from codeevolve.psychology.sprints import SprintReport, analyze_sprints
 
@@ -9,4 +10,6 @@ __all__ = [
     "analyze_cognitive_load",
     "SprintReport",
     "analyze_sprints",
+    "OffboardingReport",
+    "simulate_offboarding",
 ]

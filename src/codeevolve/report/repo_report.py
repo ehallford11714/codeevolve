@@ -121,6 +121,25 @@ def _template(ctx: dict[str, Any]) -> str:
             f"- Declining quality: {lehman.get('declining_quality')}",
             f"- Conservation of familiarity: {lehman.get('conservation_of_familiarity')}",
             f"- Feedback volatility: {lehman.get('feedback_volatility')}",
+            f"- Self regulation: {lehman.get('self_regulation')}",
+            f"- Organisational stability: {lehman.get('organisational_stability')}",
+            "",
+            "### Lehman trend tests (Mann–Kendall)",
+            (
+                f"Support map: {(e.get('lehman_trends') or {}).get('law_support')}; "
+                f"{(e.get('lehman_trends') or {}).get('summary') or '_n/a_'}"
+            ),
+            "",
+            "## Coupling, clones & reticulation",
+            (ctx.get("coupling") or {}).get("summary") or "_n/a_",
+            (ctx.get("clones") or {}).get("summary") or "_n/a_",
+            (ctx.get("reticulation") or {}).get("summary") or "_n/a_",
+            (ctx.get("cst_evolution") or {}).get("summary") or "_n/a_",
+            "",
+            "## Dependencies & offboarding",
+            (ctx.get("dependencies") or {}).get("summary") or "_n/a_",
+            (ctx.get("offboarding") or {}).get("summary") or "_n/a_",
+            (ctx.get("fork_lineage") or {}).get("summary") or "_n/a_",
             "",
             "## Phylogeny & gene flow",
             (

@@ -54,6 +54,11 @@ def main(argv: list[str] | None = None) -> int:
     an.add_argument("--no-selection", action="store_true")
     an.add_argument("--no-taxonomy-guide", action="store_true")
     an.add_argument("--no-ensure-slm", action="store_true")
+    an.add_argument("--no-cst", action="store_true")
+    an.add_argument("--no-clones", action="store_true")
+    an.add_argument("--no-reticulation", action="store_true")
+    an.add_argument("--no-fork-lineage", action="store_true")
+    an.add_argument("--peer-repo", action="append", default=[], help="Peer repo path for blob lineage")
 
     for name, help_ in (
         ("metrics", "Metrics + stability v2"),
@@ -66,6 +71,10 @@ def main(argv: list[str] | None = None) -> int:
         ("fatigue", "Sprint / fatigue trends"),
         ("sprints", "Sprint windows (milestones or weeks)"),
         ("selection", "GitHub Issues/PR selection pressure"),
+        ("coupling", "Temporal / ticket change coupling"),
+        ("clones", "Clone genealogy patterns"),
+        ("dependencies", "Lockfile / dependency fragility"),
+        ("offboarding", "Knowledge offboarding simulation"),
         ("report", "Drafted repository report"),
         ("refactor", "Refactor plan"),
         ("tiers", "List model tiers"),
@@ -166,6 +175,11 @@ def main(argv: list[str] | None = None) -> int:
             include_refactor=not args.no_refactor,
             include_symbols=not args.no_symbols,
             include_selection=not args.no_selection,
+            include_cst=not args.no_cst,
+            include_clones=not args.no_clones,
+            include_reticulation=not args.no_reticulation,
+            include_fork_lineage=not args.no_fork_lineage,
+            peer_repos=args.peer_repo or None,
             guide_taxonomy=not args.no_taxonomy_guide,
             previous_report=args.previous,
             ensure_slm=not args.no_ensure_slm,
@@ -197,10 +211,18 @@ def main(argv: list[str] | None = None) -> int:
                 "fatigue": report.fatigue.fatigue_score if report.fatigue else None,
                 "drift": report.drift.global_drift if report.drift else None,
                 "alleles": (report.drift.alleles or {}).get("mutant_count") if report.drift else None,
+                "coupling_edges": report.coupling.edges.__len__() if report.coupling else 0,
+                "clone_patterns": (report.clones.pattern_counts if report.clones else None),
+                "dep_fragility": report.dependencies.fragility if report.dependencies else None,
+                "offboarding_drop": report.offboarding.mastery_drop_top1 if report.offboarding else None,
                 "selection": report.selection.pressure_score if report.selection else None,
                 "sprints": report.sprints.source if report.sprints else None,
                 "debt_score": report.debt.score,
                 "failure_points": len(report.risk.failure_points),
+                "remediation_days": sum(
+                    (s.estimated_person_days for s in (report.refactor_plan.steps if report.refactor_plan else [])),
+                    0.0,
+                ),
                 "diff": bool(report.diff),
             }
         )
@@ -213,8 +235,12 @@ def main(argv: list[str] | None = None) -> int:
         include_repo_report=args.cmd in {"report", "refactor"},
         include_refactor=args.cmd == "refactor",
         include_hardware=False,
-        include_symbols=args.cmd in {"symbols", "taxonomy", "report"},
+        include_symbols=args.cmd in {"symbols", "taxonomy", "report", "clones"},
         include_selection=args.cmd in {"selection", "risk", "report", "refactor", "sprints"},
+        include_cst=args.cmd in {"report"},
+        include_clones=args.cmd in {"clones", "report", "risk"},
+        include_reticulation=args.cmd in {"report"},
+        include_fork_lineage=args.cmd in {"report"},
         ensure_slm=False,
     )
 
@@ -236,6 +262,14 @@ def main(argv: list[str] | None = None) -> int:
         _print(report.fatigue.to_dict() if report.fatigue else {})
     elif args.cmd == "sprints":
         _print(report.sprints.to_dict() if report.sprints else {})
+    elif args.cmd == "coupling":
+        _print(report.coupling.to_dict() if report.coupling else {})
+    elif args.cmd == "clones":
+        _print(report.clones.to_dict() if report.clones else {})
+    elif args.cmd == "dependencies":
+        _print(report.dependencies.to_dict() if report.dependencies else {})
+    elif args.cmd == "offboarding":
+        _print(report.offboarding.to_dict() if report.offboarding else {})
     elif args.cmd == "selection":
         _print(report.selection.to_dict() if report.selection else {"notes": ["not a GitHub repo spec"]})
     elif args.cmd == "report":

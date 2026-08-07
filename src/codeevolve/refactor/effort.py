@@ -1,13 +1,19 @@
-"""Effort and fitness-gain heuristics for refactor steps."""
+"""Effort and fitness-gain heuristics for refactor steps (SQALE-like person-days)."""
 
 from __future__ import annotations
 
 
-def estimate_effort(severity: float, blast: float = 0.0) -> str:
-    score = severity + 0.3 * blast
-    if score >= 0.85:
+def estimate_person_days(severity: float, blast: float = 0.0, complexity: float = 0.0) -> float:
+    """Remediation effort in person-days (SQALE-inspired)."""
+    base = 0.25 + 2.5 * severity + 1.5 * blast + 1.0 * min(1.0, complexity / 40.0)
+    return round(min(20.0, max(0.25, base)), 2)
+
+
+def estimate_effort(severity: float, blast: float = 0.0, complexity: float = 0.0) -> str:
+    days = estimate_person_days(severity, blast, complexity)
+    if days >= 4.0:
         return "L"
-    if score >= 0.5:
+    if days >= 1.5:
         return "M"
     return "S"
 

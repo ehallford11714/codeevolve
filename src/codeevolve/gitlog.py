@@ -197,3 +197,38 @@ def list_tracked_files(repo: Path | str) -> list[str]:
     repo = assert_git_repo(Path(repo))
     out = _run_git(repo, "ls-files")
     return [ln for ln in out.splitlines() if ln.strip()]
+
+
+def show_file_at(repo: Path | str, sha: str, path: str, *, max_bytes: int = 200_000) -> str | None:
+    """Return file contents at commit SHA, or None if missing."""
+    repo = assert_git_repo(Path(repo))
+    try:
+        raw = _run_git(repo, "show", f"{sha}:{path}")
+    except RuntimeError:
+        return None
+    if len(raw) > max_bytes:
+        return raw[:max_bytes]
+    return raw
+
+
+def list_blobs_at(repo: Path | str, sha: str = "HEAD", *, max_entries: int = 5000) -> list[tuple[str, str]]:
+    """Return (blob_sha, path) pairs at a tree-ish."""
+    repo = assert_git_repo(Path(repo))
+    try:
+        raw = _run_git(repo, "ls-tree", "-r", sha)
+    except RuntimeError:
+        return []
+    out: list[tuple[str, str]] = []
+    for ln in raw.splitlines():
+        # mode type sha\tpath
+        parts = ln.split("\t", 1)
+        if len(parts) != 2:
+            continue
+        meta, path = parts
+        bits = meta.split()
+        if len(bits) < 3 or bits[1] != "blob":
+            continue
+        out.append((bits[2], path))
+        if len(out) >= max_entries:
+            break
+    return out

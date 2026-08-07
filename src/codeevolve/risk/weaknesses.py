@@ -13,8 +13,11 @@ from codeevolve.gitlog import CommitRecord
 from codeevolve.ingest.github_api import SelectionPressure
 from codeevolve.metrics import MetricBundle
 from codeevolve.psychology.load import CognitiveLoadReport
+from codeevolve.psychology.offboarding import OffboardingReport
 from codeevolve.psychology.rhythm import FatigueReport
 from codeevolve.risk.blast_radius import cochange_degrees
+from codeevolve.risk.coupling import CouplingReport
+from codeevolve.risk.dependencies import DependencyFragilityReport
 from codeevolve.taxonomy.tree import TaxonomyReport
 
 
@@ -65,6 +68,9 @@ def analyze_risk(
     selection: SelectionPressure | None = None,
     fatigue: FatigueReport | None = None,
     cognitive_load: CognitiveLoadReport | None = None,
+    coupling: CouplingReport | None = None,
+    dependencies: DependencyFragilityReport | None = None,
+    offboarding: OffboardingReport | None = None,
 ) -> RiskReport:
     points: list[FailurePoint] = []
     n = max(1, len(commits))
@@ -85,14 +91,26 @@ def analyze_risk(
             else:
                 prod_touch += 1
 
-    for i, hot in enumerate(metrics.hot_files[:8]):
-        path = hot["path"]
-        touches = hot["touches"]
-        blast = deg.get(path, 0)
-        # Soft-cap hotspot severity so mature OSS doesn't all score 1.0
-        import math
+    import math
 
-        sev = min(1.0, 0.35 + 0.35 * math.log1p(touches) / math.log1p(n) + 0.25 * math.log1p(blast) / math.log1p(40))
+    # Prefer churn × complexity ranking when hotspot_score present
+    hot_ranked = sorted(
+        metrics.hot_files,
+        key=lambda h: -float(h.get("hotspot_score") or h.get("touches") or 0),
+    )
+    for hot in hot_ranked[:8]:
+        path = hot["path"]
+        touches = int(hot.get("touches") or 0)
+        blast = deg.get(path, 0)
+        cx = float(hot.get("complexity") or 0)
+        hs = float(hot.get("hotspot_score") or 0)
+        sev = min(
+            1.0,
+            0.25
+            + 0.35 * math.log1p(touches) / math.log1p(n)
+            + 0.2 * math.log1p(blast) / math.log1p(40)
+            + 0.25 * min(1.0, hs * 1.4 + cx / 80.0),
+        )
         points.append(
             FailurePoint(
                 id=f"W{len(points)+1}",
@@ -100,11 +118,35 @@ def analyze_risk(
                 severity=round(sev, 3),
                 path=path,
                 clade_id=taxonomy.path_to_clade.get(path, "clade_unknown"),
-                title=f"Hotspot with blast radius ({blast} co-changers)",
-                evidence=[{"touches": touches, "co_changers": blast}],
+                title=f"Hotspot churn×complexity ({blast} co-changers, cx={int(cx) or '?'})",
+                evidence=[
+                    {
+                        "touches": touches,
+                        "co_changers": blast,
+                        "complexity": cx,
+                        "hotspot_score": hs,
+                    }
+                ],
                 suggested_intervention="Extract boundaries; add characterization tests before further growth",
             )
         )
+
+    if coupling and coupling.edges:
+        for e in coupling.edges[:5]:
+            if e.weight < 3:
+                continue
+            points.append(
+                FailurePoint(
+                    id=f"W{len(points)+1}",
+                    kind="change_coupling",
+                    severity=round(min(1.0, 0.35 + e.weight / 12.0), 3),
+                    path=f"{e.a} ↔ {e.b}",
+                    clade_id=taxonomy.path_to_clade.get(e.a, "clade_unknown"),
+                    title=f"Temporal coupling ({e.kind}, weight={e.weight})",
+                    evidence=[e.to_dict()],
+                    suggested_intervention="Break co-change bond: shared module, API seam, or ownership boundary",
+                )
+            )
 
     for path, rc in sorted(revert_files.items(), key=lambda x: -x[1])[:6]:
         if rc < 2:
@@ -164,6 +206,34 @@ def analyze_risk(
                 title="Elevated dependency churn",
                 evidence=[{"dependency_rate": metrics.dependency_rate}],
                 suggested_intervention="Pin critical deps; batch upgrades with CI gates",
+            )
+        )
+
+    if dependencies and dependencies.fragility >= 0.4:
+        points.append(
+            FailurePoint(
+                id=f"W{len(points)+1}",
+                kind="dependency_fragility",
+                severity=round(min(1.0, 0.35 + dependencies.fragility), 3),
+                path="(supply chain)",
+                clade_id="global",
+                title="Dependency fragility (lockfile / transitive / churn)",
+                evidence=[dependencies.to_dict()],
+                suggested_intervention="Add/refresh lockfile; shrink transitive fan-out; pin critical upstreams",
+            )
+        )
+
+    if offboarding and offboarding.mastery_drop_top1 >= 0.35:
+        points.append(
+            FailurePoint(
+                id=f"W{len(points)+1}",
+                kind="offboarding_risk",
+                severity=round(min(1.0, 0.4 + offboarding.mastery_drop_top1), 3),
+                path="(knowledge)",
+                clade_id="global",
+                title=f"Offboarding risk (top-1 mastery drop {offboarding.mastery_drop_top1:.0%})",
+                evidence=[offboarding.to_dict()],
+                suggested_intervention="Pair on uncovered hotspots; document invariants; spread ownership",
             )
         )
 
