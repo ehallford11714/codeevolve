@@ -12,6 +12,8 @@ from codeevolve.complexity import enrich_hotspots
 from codeevolve.dashboard import write_dashboard
 from codeevolve.debt import DebtReport, analyze_debt
 from codeevolve.ecology import EcologyReport, analyze_ecology
+from codeevolve.eval.confidence import SignalConfidenceReport, score_signal_confidence
+from codeevolve.eval.hypothesis import HypothesisPanel, build_hypothesis_panel
 from codeevolve.genetics import GeneticsReport, analyze_genetics
 from codeevolve.genetics.clones import CloneGenealogyReport, analyze_clone_genealogy
 from codeevolve.genetics.drift import DriftReport, analyze_drift
@@ -72,6 +74,8 @@ class EvolveReport:
     dependencies: Optional[DependencyFragilityReport] = None
     offboarding: Optional[OffboardingReport] = None
     fork_lineage: Optional[ForkLineageReport] = None
+    hypothesis_panel: Optional[HypothesisPanel] = None
+    signal_confidence: Optional[SignalConfidenceReport] = None
     model_tier: str = "slm"
     blast_radius: list[dict[str, Any]] = field(default_factory=list)
     change_timeline: list[dict[str, Any]] = field(default_factory=list)
@@ -105,6 +109,8 @@ class EvolveReport:
             "dependencies": self.dependencies.to_dict() if self.dependencies else None,
             "offboarding": self.offboarding.to_dict() if self.offboarding else None,
             "fork_lineage": self.fork_lineage.to_dict() if self.fork_lineage else None,
+            "hypothesis_panel": self.hypothesis_panel.to_dict() if self.hypothesis_panel else None,
+            "signal_confidence": self.signal_confidence.to_dict() if self.signal_confidence else None,
             "selection": self.selection.to_dict() if self.selection else None,
             "fatigue": self.fatigue.to_dict() if self.fatigue else None,
             "cognitive_load": self.cognitive_load.to_dict() if self.cognitive_load else None,
@@ -238,6 +244,15 @@ class CodeEvolve:
             dependencies=dependencies,
             offboarding=offboarding,
         )
+        hypothesis_panel = build_hypothesis_panel(
+            commits,
+            metrics,
+            ecology.lehman,
+            ecology.lehman_trends,
+            stage=ecology.global_stage,
+            stage_rationale=ecology.stage_rationale,
+        )
+        signal_confidence = score_signal_confidence(commits, metrics, coupling, offboarding)
         blast = blast_radius_table(commits)
         timeline = change_rate_timeline(commits)
 
@@ -284,6 +299,8 @@ class CodeEvolve:
             "dependencies": dependencies.to_dict(),
             "offboarding": offboarding.to_dict(),
             "fork_lineage": fork_lineage.to_dict() if fork_lineage else None,
+            "hypothesis_panel": hypothesis_panel.to_dict(),
+            "signal_confidence": signal_confidence.to_dict(),
             "selection": selection.to_dict() if selection else None,
             "fatigue": fatigue.to_dict(),
             "cognitive_load": load.to_dict(),
@@ -343,6 +360,8 @@ class CodeEvolve:
             dependencies=dependencies,
             offboarding=offboarding,
             fork_lineage=fork_lineage,
+            hypothesis_panel=hypothesis_panel,
+            signal_confidence=signal_confidence,
             model_tier=self.model_tier,
             blast_radius=blast,
             change_timeline=timeline,
@@ -367,3 +386,10 @@ class CodeEvolve:
     @staticmethod
     def write_dashboard(report: dict[str, Any], path: Path | str) -> Path:
         return write_dashboard(report, path)
+
+    @staticmethod
+    def evaluate(work_dir: Path | str | None = None):
+        """Run synthetic-fixture evaluation suite (detection agreement scores)."""
+        from codeevolve.eval.runner import run_evaluation
+
+        return run_evaluation(work_dir)

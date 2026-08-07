@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codeevolve"
-version = "0.6.0"
-description = "Evaluate code evolution from git history — coupling, clone genealogy, Lehman trends, dep fragility, offboarding, SLM taxonomy, CI/PR."
+version = "0.7.0"
+description = "Evaluate code evolution with hypothesis panels, signal confidence, and benchmarked detectors — SLM taxonomy, coupling, CI/PR."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"

@@ -167,5 +167,7 @@ def analyze_lehman_trends(commits: list[CommitRecord], metrics: MetricBundle) ->
     return LehmanTrendReport(
         tests=tests,
         law_support=support,
-        summary=f"Mann–Kendall on {len(tests)} series; {topped}",
+        summary=(
+            f"Mann–Kendall on {len(tests)} series (hypotheses, not grades); {topped}"
+        ),
     )

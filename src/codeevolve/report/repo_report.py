@@ -74,13 +74,16 @@ def _template(ctx: dict[str, Any]) -> str:
             "## Executive summary",
             (
                 f"Stage **{e.get('global_stage') or p.get('current_stage')}** "
-                f"({e.get('stage_rationale') or p.get('stage_rationale')}). "
+                f"(hypothesis — {e.get('stage_rationale') or p.get('stage_rationale')}). "
                 f"Composite stability={stab.get('composite', m.get('code_stability'))}, "
                 f"revert_rate={m.get('revert_rate')}, debt={d.get('score')}, "
                 f"drift={drift.get('global_drift')}, fatigue={fat.get('fatigue_score')}, "
                 f"cognitive_load={load.get('load_index')}, "
                 f"failure_points={r.get('count', len(weaknesses))}."
             ),
+            "",
+            f"Hero signals: {(ctx.get('signal_confidence') or {}).get('hero_ranking')}; "
+            f"{(ctx.get('signal_confidence') or {}).get('summary') or ''}",
             "",
             "## Stability decomposition",
             f"- Structural: {stab.get('structural')}",
@@ -114,7 +117,7 @@ def _template(ctx: dict[str, Any]) -> str:
             f"momentum={m.get('momentum')}, improvement_trend={m.get('improvement_trend')}.",
             f"Timeline windows: {e.get('timeline')}.",
             "",
-            "### Lehman proxies",
+            "### Lehman proxies (not grades)",
             f"- Continuing change: {lehman.get('continuing_change')}",
             f"- Increasing complexity: {lehman.get('increasing_complexity')}",
             f"- Continuing growth: {lehman.get('continuing_growth')}",
@@ -123,6 +126,17 @@ def _template(ctx: dict[str, Any]) -> str:
             f"- Feedback volatility: {lehman.get('feedback_volatility')}",
             f"- Self regulation: {lehman.get('self_regulation')}",
             f"- Organisational stability: {lehman.get('organisational_stability')}",
+            "",
+            "### Hypothesis panel",
+            (ctx.get("hypothesis_panel") or {}).get("disclaimer") or "",
+            (ctx.get("hypothesis_panel") or {}).get("summary") or "_n/a_",
+            (
+                "Claims: "
+                + ", ".join(
+                    f"{c.get('id')}={c.get('verdict')}@{c.get('confidence')}"
+                    for c in ((ctx.get("hypothesis_panel") or {}).get("claims") or [])[:8]
+                )
+            ),
             "",
             "### Lehman trend tests (Mann–Kendall)",
             (

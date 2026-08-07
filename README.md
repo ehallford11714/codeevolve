@@ -88,7 +88,7 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 - [Metrics](docs/METRICS.md)
 - [Cloud / HF Qwen](docs/CLOUD.md)
 
-**0.6** folds in literature takeaways: temporal/ticket **change coupling**, **churn×complexity** hotspots, **clone genealogy**, AST-lite **reticulation**, **CST evolution**, full **Lehman + Mann–Kendall**, **dependency fragility**, **offboarding** simulation, **SQALE-like person-days**, and **blob fork lineage**. **0.5** remains: real default SLM, alleles, CI/PR/dashboard. See [docs/CLOUD.md](docs/CLOUD.md).
+**0.7** adds **rigor**: Lehman/ecology as a **hypothesis panel** (support/weak/contradict/insufficient + confidence), **hero signal confidence** (coupling · churn×complexity · offboarding), and `evaluate` against synthetic ground-truth fixtures. See [docs/EVAL.md](docs/EVAL.md). **0.6** literature takeaways and **0.5** SLM/CI/dashboard remain.
 
 ```powershell
 # Diff + dashboard + PR comment + CI gate
@@ -97,6 +97,7 @@ python -m codeevolve --repo . coupling
 python -m codeevolve --repo . clones
 python -m codeevolve --repo . dependencies
 python -m codeevolve --repo . offboarding
+python -m codeevolve evaluate --md-out eval.md
 python -m codeevolve comment --report report.json --out pr.md
 python -m codeevolve ci --report report.json --previous report.prev.json
 ```

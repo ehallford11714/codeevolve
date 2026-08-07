@@ -105,7 +105,34 @@ def main(argv: list[str] | None = None) -> int:
     dash.add_argument("--report", required=True)
     dash.add_argument("--out", default="codeevolve_dashboard.html")
 
+    ev = sub.add_parser("evaluate", help="Run synthetic-fixture evaluation suite")
+    ev.add_argument("--work-dir", default=None, help="Scratch dir for fixtures (default .codeevolve_eval)")
+    ev.add_argument("--out", default=None, help="Write evaluation JSON")
+    ev.add_argument("--md-out", default=None, help="Write evaluation markdown")
+
     args = p.parse_args(argv)
+
+    if args.cmd == "evaluate":
+        report = CodeEvolve.evaluate(args.work_dir)
+        if args.out:
+            Path(args.out).write_text(
+                json.dumps(report.to_dict(), indent=2, default=str),
+                encoding="utf-8",
+            )
+        if args.md_out:
+            Path(args.md_out).write_text(report.markdown, encoding="utf-8")
+        _print(
+            {
+                "summary": report.summary,
+                "overall_score": report.overall_score,
+                "passed_cases": report.passed_cases,
+                "total_cases": report.total_cases,
+                "cases": [
+                    {"name": c.name, "score": c.score, "failed": c.failed} for c in report.cases
+                ],
+            }
+        )
+        return 0 if report.overall_score >= 0.7 else 1
 
     if args.cmd == "tiers":
         _print({k: v.to_dict() for k, v in TIERS.items()})
@@ -223,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
                     (s.estimated_person_days for s in (report.refactor_plan.steps if report.refactor_plan else [])),
                     0.0,
                 ),
+                "hero_signals": report.signal_confidence.hero_ranking if report.signal_confidence else None,
+                "hypotheses": (report.hypothesis_panel.to_dict().get("counts") if report.hypothesis_panel else None),
                 "diff": bool(report.diff),
             }
         )
