@@ -257,8 +257,18 @@ def _template(ctx: dict[str, Any]) -> str:
                 f"dependency_rate={m.get('dependency_rate')}."
             ),
             "",
+            "## Provenance (deliberation)",
+            ((ctx.get("provenance") or {}).get("summary") or "_run `codeevolve provenance --pack`_"),
+            "Top frames: "
+            + ", ".join(
+                f"{f.get('id')}[{f.get('stance')}@{f.get('confidence')}]"
+                for f in ((ctx.get("provenance") or {}).get("frames") or [])[:8]
+            ),
+            "",
+            "Use `provenance --frame <id>` / `--path-pack <path>` / `--resolve <id>` to deliberate claim→evidence→falsifier.",
+            "",
             "## Appendix",
-            "See JSON fields `taxonomy`, `genetics`, `ecology`, `risk`, `debt`, `metrics` for evidence.",
+            "See JSON fields `provenance`, `taxonomy`, `genetics`, `ecology`, `risk`, `debt`, `metrics` for evidence.",
             "",
         ]
     )

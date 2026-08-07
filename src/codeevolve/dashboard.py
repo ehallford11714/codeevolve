@@ -28,12 +28,26 @@ def render_dashboard(report: dict[str, Any]) -> str:
             }
         )
 
+    frames = ((report.get("provenance") or {}).get("frames") or [])[:10]
+    dyn = report.get("dynamics") or {}
     data = {
         "points": points,
         "weekly": weekly[-16:],
         "stability": stab,
         "fatigue": (report.get("fatigue") or {}).get("fatigue_score"),
         "stage": (report.get("ecology") or {}).get("global_stage"),
+        "frames": [
+            {
+                "id": f.get("id"),
+                "stance": f.get("stance"),
+                "confidence": f.get("confidence"),
+                "claim": f.get("claim"),
+            }
+            for f in frames
+            if isinstance(f, dict)
+        ],
+        "dynamics_summary": dyn.get("summary"),
+        "state_months": [s.get("month") for s in (dyn.get("samples") or [])[-12:] if isinstance(s, dict)],
     }
     payload = json.dumps(data)
 
@@ -78,6 +92,12 @@ def render_dashboard(report: dict[str, Any]) -> str:
     <table><thead><tr><th>ID</th><th>Label</th><th>Layer</th><th>Churn</th><th>Drift</th></tr></thead>
     <tbody id="rows"></tbody></table>
   </section>
+  <section style="grid-column:1/-1">
+    <h2>Deliberation frames</h2>
+    <div class="meta" id="dyn"></div>
+    <table><thead><tr><th>Frame</th><th>Stance</th><th>Conf</th><th>Claim</th></tr></thead>
+    <tbody id="frames"></tbody></table>
+  </section>
 </main>
 <script>
 const DATA = {payload};
@@ -112,6 +132,11 @@ for (const p of DATA.points) {{
 }}
 ctx.fillStyle = '#8b9aab'; ctx.fillText('churn →', W/2, H-8); ctx.save();
 ctx.translate(14, H/2); ctx.rotate(-Math.PI/2); ctx.fillText('drift →', 0, 0); ctx.restore();
+document.getElementById('dyn').textContent = DATA.dynamics_summary || '';
+const fr = document.getElementById('frames');
+for (const f of (DATA.frames || [])) {{
+  fr.insertAdjacentHTML('beforeend', `<tr><td>${{f.id||''}}</td><td>${{f.stance||''}}</td><td>${{f.confidence??''}}</td><td>${{(f.claim||'').replace(/</g,'')}}</td></tr>`);
+}}
 </script>
 </body>
 </html>

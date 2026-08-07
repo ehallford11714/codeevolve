@@ -75,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         ("semantics", "Semantic themes"),
         ("taxonomy", "SLM-guided taxonomy"),
         ("hierarchy", "Deep nested build hierarchy + ecological trend report"),
+        ("provenance", "Unified provenance ledger for deliberation"),
         ("keyword-taxonomy", "Keyword code-type ontology + path classifications"),
         ("word2vec", "Word2Vec over code-evolution corpus"),
         ("semantic-taxonomy", "Chroma/Pinecone semantic niches"),
@@ -98,6 +99,23 @@ def main(argv: list[str] | None = None) -> int:
             if name != "hierarchy":
                 sp.add_argument("--llm", nargs="?", const="auto", default=None)
             sp.add_argument("--md-out", default=None)
+        if name == "provenance":
+            sp.add_argument("--path", default=None, help="Filter records by path prefix/substring")
+            sp.add_argument("--clade", default=None, help="Filter by clade id")
+            sp.add_argument("--kind", default=None, help="Record kind (lineage|event|hypothesis|...)")
+            sp.add_argument("--tag", default=None)
+            sp.add_argument("--since", default=None, help="ISO lower bound on record.when")
+            sp.add_argument("--until", default=None)
+            sp.add_argument("--pack", action="store_true", help="Emit deliberation pack (frames+evidence)")
+            sp.add_argument("--path-pack", dest="path_pack", default=None, help="Path-centric provenance pack")
+            sp.add_argument("--timeline", action="store_true", help="Chronological provenance slice")
+            sp.add_argument("--resolve", default=None, help="Walk evidence chain from record/frame id")
+            sp.add_argument("--frame", default=None, help="Expand a deliberation frame with evidence")
+            sp.add_argument("--depth", type=int, default=2, help="Resolve chain depth")
+            sp.add_argument("--out", default=None, help="Write JSON")
+            sp.add_argument("--from-report", default=None, help="Build ledger from existing report.json")
+            sp.add_argument("--schema", action="store_true", help="Emit JSON Schema + MCP tool descriptors")
+            sp.add_argument("--schema-out", default=None, help="Write schema files to directory")
 
     hw = sub.add_parser("hardware", help="Hardware + SLM / taxonomy-embedder probe")
     hw.add_argument("--ensure-hf", action="store_true")
@@ -126,8 +144,8 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument(
         "--suite",
         default="all",
-        choices=["synthetic", "public", "taxonomy", "ecology", "all"],
-        help="synthetic | taxonomy | ecology | public scorecard | all (default)",
+        choices=["synthetic", "public", "taxonomy", "ecology", "dynamics", "all"],
+        help="synthetic | taxonomy | ecology | dynamics | public scorecard | all (default)",
     )
     ev.add_argument(
         "--offline",
@@ -142,6 +160,43 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     args = p.parse_args(argv)
+
+    if args.cmd == "provenance" and (
+        getattr(args, "schema", False) or getattr(args, "schema_out", None)
+    ):
+        from codeevolve.provenance.schema import schemas, write_schemas
+
+        written = write_schemas(args.schema_out) if getattr(args, "schema_out", None) else {}
+        payload = {"schemas": schemas(), "written": written}
+        if getattr(args, "out", None):
+            Path(args.out).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        _print(payload)
+        return 0
+
+    if args.cmd == "provenance" and getattr(args, "from_report", None):
+        from codeevolve.provenance import build_provenance_ledger, query_provenance
+
+        data = json.loads(Path(args.from_report).read_text(encoding="utf-8"))
+        ledger = build_provenance_ledger(data)
+        payload = query_provenance(
+            ledger,
+            path=getattr(args, "path", None),
+            clade=getattr(args, "clade", None),
+            kind=getattr(args, "kind", None),
+            tag=getattr(args, "tag", None),
+            since=getattr(args, "since", None),
+            until=getattr(args, "until", None),
+            pack=bool(getattr(args, "pack", False)),
+            path_pack=getattr(args, "path_pack", None),
+            timeline=bool(getattr(args, "timeline", False)),
+            resolve=getattr(args, "resolve", None),
+            frame=getattr(args, "frame", None),
+            depth=getattr(args, "depth", 2),
+        )
+        if getattr(args, "out", None):
+            Path(args.out).write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+        _print(payload)
+        return 0
 
     if args.cmd == "evaluate":
         report = CodeEvolve.evaluate(
@@ -165,6 +220,7 @@ def main(argv: list[str] | None = None) -> int:
                 "synthetic_score": report.synthetic_score,
                 "taxonomy_score": report.taxonomy_score,
                 "ecology_score": report.ecology_score,
+                "dynamics_score": report.dynamics_score,
                 "public_score": report.public_score,
                 "public_skipped": report.public_skipped,
                 "passed_cases": report.passed_cases,
@@ -178,8 +234,9 @@ def main(argv: list[str] | None = None) -> int:
         synth_ok = report.synthetic_score is None or report.synthetic_score >= 0.7
         tax_ok = report.taxonomy_score is None or report.taxonomy_score >= 0.7
         eco_ok = report.ecology_score is None or report.ecology_score >= 0.7
+        dyn_ok = report.dynamics_score is None or report.dynamics_score >= 0.7
         public_ok = report.public_score is None or report.public_score >= 0.55
-        return 0 if (synth_ok and tax_ok and eco_ok and public_ok and report.overall_score >= 0.55) else 1
+        return 0 if (synth_ok and tax_ok and eco_ok and dyn_ok and public_ok and report.overall_score >= 0.55) else 1
 
     if args.cmd == "tiers":
         _print({k: v.to_dict() for k, v in TIERS.items()})
@@ -332,7 +389,14 @@ def main(argv: list[str] | None = None) -> int:
         include_clones=args.cmd in {"clones", "report", "risk"},
         include_reticulation=args.cmd in {"report"},
         include_fork_lineage=args.cmd in {"report"},
-        include_semantic=args.cmd in {"taxonomy", "word2vec", "semantic-taxonomy", "report", "hierarchy"},
+        include_semantic=args.cmd in {
+            "taxonomy",
+            "word2vec",
+            "semantic-taxonomy",
+            "report",
+            "hierarchy",
+            "provenance",
+        },
         ensure_slm=False,
     )
 
@@ -356,6 +420,29 @@ def main(argv: list[str] | None = None) -> int:
             print(ht.markdown)
         else:
             _print({})
+    elif args.cmd == "provenance":
+        from codeevolve.provenance import build_provenance_ledger, query_provenance
+
+        ledger = report.provenance or build_provenance_ledger(report.to_dict())
+        payload = query_provenance(
+            ledger,
+            path=getattr(args, "path", None),
+            clade=getattr(args, "clade", None),
+            kind=getattr(args, "kind", None),
+            tag=getattr(args, "tag", None),
+            since=getattr(args, "since", None),
+            until=getattr(args, "until", None),
+            pack=bool(getattr(args, "pack", False)),
+            path_pack=getattr(args, "path_pack", None),
+            timeline=bool(getattr(args, "timeline", False)),
+            resolve=getattr(args, "resolve", None),
+            frame=getattr(args, "frame", None),
+            depth=getattr(args, "depth", 2),
+        )
+        out = getattr(args, "out", None)
+        if out:
+            Path(out).write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+        _print(payload)
     elif args.cmd == "keyword-taxonomy":
         kw = report.taxonomy.keyword_taxonomy
         if kw:

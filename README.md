@@ -1,12 +1,13 @@
 # CodeEvolve
 
-**Evaluate how a codebase evolves** from git history — taxonomy & phylogeny, Lehman/ecological signals, technical debt, ranked failure points, a drafted repository report, and an evidence-linked refactor plan.
+**Evaluate how a codebase evolves** from git history — taxonomy & phylogeny, Lehman/ecological signals, technical debt, ranked failure points, a **provenance ledger for deliberation**, a drafted repository report, and an evidence-linked refactor plan.
 
 ```
 GitHub URL | local path
     → taxonomy + clade allocation
     → genetics (lineage, gene flow) + ecology (stages, Lehman proxies)
     → metrics + debt + weaknesses
+    → provenance ledger (claim → evidence → falsifier)
     → repo report + refactor plan
     → narrative (heuristic | HF Qwen | cloud)
 ```
@@ -81,6 +82,7 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 | **Weaknesses** | Ranked failure points (hotspot blast, reverts, bus factor, test gap, …) |
 | **Repo report** | Drafted markdown brief of evolutionary state |
 | **Refactor plan** | Stabilize → contain → pay down → evolve (evidence-linked) |
+| **Provenance** | Ledger + dynamics trajectory (basins, impulses, selection, inter-report diffs) |
 
 ## Docs
 
@@ -88,12 +90,15 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 - [Architecture](docs/ARCHITECTURE.md)
 - [Metrics](docs/METRICS.md)
 - [Cloud / HF Qwen](docs/CLOUD.md)
+- [Provenance / deliberation](docs/PROVENANCE.md)
 
-**0.13** calibrates ecology to **lifecycle events + PELT changepoints** (`evaluate --suite ecology`) — see [docs/ECOLOGY.md](docs/ECOLOGY.md). **0.12** SLM+RAG taxonomy + keyword hierarchies ([docs/RAG.md](docs/RAG.md), [docs/HIERARCHY.md](docs/HIERARCHY.md)).
+**0.16** adds blast/symbol/CST micro-provenance, deliberation **JSON Schema + MCP tools**, and `evaluate --suite dynamics`. **0.15** state trajectory / selection / diffs. See [docs/PROVENANCE.md](docs/PROVENANCE.md).
 
 ```powershell
-python -m codeevolve --repo . hierarchy --md-out built_trends.md
-python -m codeevolve --repo . keyword-taxonomy
+python -m codeevolve --repo . provenance --pack --frame frame:basin
+python -m codeevolve provenance --schema-out schemas
+python -m codeevolve evaluate --suite dynamics
+python -m codeevolve --repo . analyze --previous report.prev.json --out report.json
 ```
 
 ```powershell

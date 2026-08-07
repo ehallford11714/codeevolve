@@ -24,6 +24,8 @@ class SelectionPressure:
     bug_label_rate: float = 0.0
     pr_merge_rate: float = 0.0
     pressure_score: float = 0.0
+    recent_issues: list[dict[str, Any]] = field(default_factory=list)
+    recent_prs: list[dict[str, Any]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -39,6 +41,8 @@ class SelectionPressure:
             "bug_label_rate": self.bug_label_rate,
             "pr_merge_rate": self.pr_merge_rate,
             "pressure_score": self.pressure_score,
+            "recent_issues": list(self.recent_issues[:25]),
+            "recent_prs": list(self.recent_prs[:25]),
             "notes": list(self.notes),
         }
 
@@ -95,12 +99,28 @@ def fetch_selection_pressure(
         labels = item.get("labels") or []
         if labels:
             labeled += 1
+        label_names: list[str] = []
+        is_bug = False
         for lab in labels:
             name = (lab.get("name") if isinstance(lab, dict) else str(lab)).lower()
+            label_names.append(name)
             sp.label_counts[name] = sp.label_counts.get(name, 0) + 1
             if any(k in name for k in ("bug", "defect", "crash", "regression")):
                 bugish += 1
-                break
+                is_bug = True
+        if len(sp.recent_issues) < 25:
+            sp.recent_issues.append(
+                {
+                    "number": item.get("number"),
+                    "title": item.get("title"),
+                    "state": state,
+                    "created_at": item.get("created_at"),
+                    "closed_at": item.get("closed_at"),
+                    "labels": label_names[:12],
+                    "epistemic": "stated",
+                    "bug_like": is_bug,
+                }
+            )
 
     sp.bug_label_rate = round(bugish / max(1, sp.issues_sampled), 4)
 
@@ -116,6 +136,18 @@ def fetch_selection_pressure(
             sp.prs_sampled += 1
             if pr.get("merged_at"):
                 merged += 1
+            if len(sp.recent_prs) < 25:
+                sp.recent_prs.append(
+                    {
+                        "number": pr.get("number"),
+                        "title": pr.get("title"),
+                        "state": pr.get("state"),
+                        "created_at": pr.get("created_at"),
+                        "merged_at": pr.get("merged_at"),
+                        "user": (pr.get("user") or {}).get("login"),
+                        "epistemic": "stated",
+                    }
+                )
     sp.pr_merge_rate = round(merged / max(1, sp.prs_sampled), 4) if sp.prs_sampled else 0.0
 
     # Selection pressure: bugs + reopen-like + open backlog vs merge health

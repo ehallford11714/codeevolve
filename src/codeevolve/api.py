@@ -78,6 +78,8 @@ class EvolveReport:
     fork_lineage: Optional[ForkLineageReport] = None
     hypothesis_panel: Optional[HypothesisPanel] = None
     signal_confidence: Optional[SignalConfidenceReport] = None
+    provenance: Optional[Any] = None
+    dynamics: Optional[dict[str, Any]] = None
     model_tier: str = "slm"
     blast_radius: list[dict[str, Any]] = field(default_factory=list)
     change_timeline: list[dict[str, Any]] = field(default_factory=list)
@@ -114,6 +116,8 @@ class EvolveReport:
             "fork_lineage": self.fork_lineage.to_dict() if self.fork_lineage else None,
             "hypothesis_panel": self.hypothesis_panel.to_dict() if self.hypothesis_panel else None,
             "signal_confidence": self.signal_confidence.to_dict() if self.signal_confidence else None,
+            "provenance": self.provenance.to_dict() if self.provenance else None,
+            "dynamics": self.dynamics,
             "selection": self.selection.to_dict() if self.selection else None,
             "fatigue": self.fatigue.to_dict() if self.fatigue else None,
             "cognitive_load": self.cognitive_load.to_dict() if self.cognitive_load else None,
@@ -322,6 +326,7 @@ class CodeEvolve:
             "fork_lineage": fork_lineage.to_dict() if fork_lineage else None,
             "hypothesis_panel": hypothesis_panel.to_dict(),
             "signal_confidence": signal_confidence.to_dict(),
+            # provenance built after ctx; filled on EvolveReport
             "selection": selection.to_dict() if selection else None,
             "fatigue": fatigue.to_dict(),
             "cognitive_load": load.to_dict(),
@@ -339,6 +344,21 @@ class CodeEvolve:
             llm_flag = "hf-qwen"
         else:
             llm_flag = use_llm  # type: ignore[assignment]
+
+        from codeevolve.provenance import build_provenance_ledger
+        from codeevolve.provenance.dynamics import build_dynamics
+
+        dynamics = build_dynamics(ctx, commits)
+        ctx["dynamics"] = dynamics.to_dict()
+        provenance = build_provenance_ledger(ctx)
+        ctx["provenance"] = {
+            "summary": provenance.summary,
+            "record_count": len(provenance.records),
+            "frame_count": len(provenance.frames),
+            "frames": [f.to_dict() for f in provenance.frames[:12]],
+            "indexes": provenance.to_dict().get("indexes"),
+            "dynamics_summary": dynamics.summary,
+        }
 
         trend = write_trend_report(ctx, use_llm=bool(llm_flag)) if write_report else None
         repo_doc = write_repo_report(ctx, llm=llm_flag if llm_flag else False) if include_repo_report else None
@@ -384,6 +404,8 @@ class CodeEvolve:
             fork_lineage=fork_lineage,
             hypothesis_panel=hypothesis_panel,
             signal_confidence=signal_confidence,
+            provenance=provenance,
+            dynamics=dynamics.to_dict(),
             model_tier=self.model_tier,
             blast_radius=blast,
             change_timeline=timeline,
@@ -421,7 +443,9 @@ class CodeEvolve:
         from codeevolve.eval.runner import Suite, run_evaluation
 
         s: Suite = (  # type: ignore[assignment]
-            suite if suite in {"synthetic", "public", "taxonomy", "ecology", "all"} else "all"
+            suite
+            if suite in {"synthetic", "public", "taxonomy", "ecology", "dynamics", "all"}
+            else "all"
         )
         return run_evaluation(
             work_dir,
@@ -429,3 +453,10 @@ class CodeEvolve:
             offline=offline,
             public_case_ids=public_case_ids,
         )
+
+    @staticmethod
+    def provenance_from_report(report: dict[str, Any], **filters: Any):
+        """Build/query unified provenance ledger from a report dict."""
+        from codeevolve.provenance import build_provenance_ledger, query_provenance
+
+        return query_provenance(build_provenance_ledger(report), **filters)

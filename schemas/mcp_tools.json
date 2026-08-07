@@ -1,0 +1,104 @@
+{
+  "tools": [
+    {
+      "name": "provenance_pack",
+      "description": "Build a deliberation pack from a CodeEvolve report.json or live analyze. Returns frames with claim\u2192evidence\u2192falsifier for agent deliberation.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "from_report": {
+            "type": "string",
+            "description": "Path to report.json"
+          },
+          "path": {
+            "type": "string",
+            "description": "Optional path focus"
+          },
+          "clade": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "provenance_expand_frame",
+      "description": "Expand a deliberation frame id with evidence records, chain, and timeline.",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "frame"
+        ],
+        "properties": {
+          "from_report": {
+            "type": "string"
+          },
+          "frame": {
+            "type": "string",
+            "description": "e.g. frame:basin"
+          }
+        }
+      }
+    },
+    {
+      "name": "provenance_path_pack",
+      "description": "Path-centric provenance: lineage, episodes, graph links, related frames.",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "from_report": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "clade": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "provenance_resolve",
+      "description": "Walk evidence links from a record or frame id.",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "resolve"
+        ],
+        "properties": {
+          "from_report": {
+            "type": "string"
+          },
+          "resolve": {
+            "type": "string"
+          },
+          "depth": {
+            "type": "integer",
+            "default": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "provenance_timeline",
+      "description": "Chronological provenance slice (state samples + events).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "from_report": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "clade": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

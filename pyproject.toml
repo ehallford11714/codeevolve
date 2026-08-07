@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codeevolve"
-version = "0.13.0"
-description = "Code evolution analysis with event/changepoint ecology calibration, SLM+RAG taxonomy, and public-repo scorecard eval."
+version = "0.16.0"
+description = "Code evolution analysis with dynamical provenance, micro-provenance (blast/symbol/CST), deliberation schemas/MCP tools, and multi-suite eval."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
