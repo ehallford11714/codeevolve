@@ -202,9 +202,18 @@ def write_repo_report(context: dict[str, Any], *, llm: str | bool | None = False
             "Debt, Weaknesses, Momentum. Do not invent files.",
             {"draft": md, "signals": {k: context.get(k) for k in ("metrics", "ecology", "risk", "debt")}},
         )
-        if polished and len(polished) > 200:
+        # Keep templated draft if polish failed / returned JSON dump fallback
+        looks_real = bool(
+            polished
+            and "Executive summary" in polished
+            and "System intent:" not in polished
+            and not polished.lstrip().startswith("# Narrative")
+        )
+        if looks_real:
             md = polished
-        backend_name = narr.name
+            backend_name = narr.name
+        else:
+            backend_name = f"{narr.name}+template"
     else:
         backend_name = "heuristic"
     return RepoReportDoc(markdown=md, backend=backend_name, sections=sections)
