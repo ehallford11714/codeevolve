@@ -173,6 +173,8 @@ class CodeEvolve:
         peer_repos: list[Path | str] | None = None,
         max_symbol_files: int = 400,
         guide_taxonomy: bool = True,
+        include_semantic: bool = True,
+        vector_backend: str | None = None,
         previous_report: Path | str | None = None,
         ensure_slm: bool = True,
     ) -> EvolveReport:
@@ -195,6 +197,9 @@ class CodeEvolve:
             model_tier=self.model_tier,
             model_override=self.model_override,
             guide=guide_taxonomy,
+            include_semantic=include_semantic,
+            vector_backend=vector_backend,
+            display=self.display,
         )
         genetics = analyze_genetics(commits, taxonomy)
         ecology = analyze_ecology(commits, metrics, taxonomy)

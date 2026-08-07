@@ -88,7 +88,7 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 - [Metrics](docs/METRICS.md)
 - [Cloud / HF Qwen](docs/CLOUD.md)
 
-**0.7** adds **rigor**: Lehman/ecology as a **hypothesis panel** (support/weak/contradict/insufficient + confidence), **hero signal confidence** (coupling · churn×complexity · offboarding), and `evaluate` against synthetic ground-truth fixtures. See [docs/EVAL.md](docs/EVAL.md). **0.6** literature takeaways and **0.5** SLM/CI/dashboard remain.
+**0.8** adds **Word2Vec over evolution** + **semantic taxonomy** (ChromaDB / Pinecone / memory) to clarify clade labels per codebase — see [docs/SEMANTIC.md](docs/SEMANTIC.md). **0.7** hypothesis panels + `evaluate`; earlier SLM/CI/coupling remain.
 
 ```powershell
 # Diff + dashboard + PR comment + CI gate
@@ -97,6 +97,9 @@ python -m codeevolve --repo . coupling
 python -m codeevolve --repo . clones
 python -m codeevolve --repo . dependencies
 python -m codeevolve --repo . offboarding
+python -m codeevolve --repo . word2vec
+python -m codeevolve --repo . semantic-taxonomy
+# pip install -e ".[semantic]"  # gensim + chromadb
 python -m codeevolve evaluate --md-out eval.md
 python -m codeevolve comment --report report.json --out pr.md
 python -m codeevolve ci --report report.json --previous report.prev.json

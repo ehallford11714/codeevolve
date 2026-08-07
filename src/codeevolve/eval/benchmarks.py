@@ -61,6 +61,7 @@ def score_case(repo: Path, spec: FixtureSpec) -> BenchmarkCase:
         include_reticulation=False,
         include_fork_lineage=False,
         guide_taxonomy=False,
+        include_semantic=False,
     )
     d = report.to_dict()
     kinds = {fp["kind"] for fp in (d.get("risk") or {}).get("failure_points") or []}
@@ -168,6 +169,7 @@ def score_before_after(root: Path) -> BenchmarkCase:
         include_reticulation=False,
         include_fork_lineage=False,
         guide_taxonomy=False,
+        include_semantic=False,
     )
     ra = CodeEvolve(after).analyze(
         use_llm=False,
@@ -181,6 +183,7 @@ def score_before_after(root: Path) -> BenchmarkCase:
         include_reticulation=False,
         include_fork_lineage=False,
         guide_taxonomy=False,
+        include_semantic=False,
     )
     eb = len((rb.coupling.edges if rb.coupling else []) or [])
     ea = len((ra.coupling.edges if ra.coupling else []) or [])

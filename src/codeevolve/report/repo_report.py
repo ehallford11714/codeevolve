@@ -99,6 +99,17 @@ def _template(ctx: dict[str, Any]) -> str:
             "",
             clade_lines,
             "",
+            "### Word2Vec / semantic niches",
+            ((t.get("word2vec") or {}).get("summary") or "_word2vec n/a_"),
+            ((t.get("semantic") or {}).get("summary") or "_semantic taxonomy n/a_"),
+            (
+                "Niches: "
+                + ", ".join(
+                    f"{n.get('id')}:{n.get('label')}"
+                    for n in ((t.get("semantic") or {}).get("niches") or [])[:8]
+                )
+            ),
+            "",
             "## Sprint & fatigue trends",
             fat.get("summary") or "_n/a_",
             f"After-hours={fat.get('after_hours_rate')}, weekend={fat.get('weekend_rate')}, "

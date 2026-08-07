@@ -108,6 +108,8 @@ class TaxonomyReport:
     allocations: list[AllocatedDelta]
     file_count: int
     guidance: dict[str, Any] = field(default_factory=dict)
+    word2vec: dict[str, Any] | None = None
+    semantic: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -120,6 +122,8 @@ class TaxonomyReport:
             "allocation_count": len(self.allocations),
             "file_count": self.file_count,
             "guidance": dict(self.guidance),
+            "word2vec": self.word2vec,
+            "semantic": self.semantic,
         }
 
 
@@ -183,6 +187,9 @@ def build_taxonomy(
     model_tier: str | None = "slm",
     model_override: str | None = None,
     guide: bool = True,
+    include_semantic: bool = True,
+    vector_backend: str | None = None,
+    display: str | None = None,
 ) -> TaxonomyReport:
     repo = Path(repo)
     tracked = list_tracked_files(repo)[:max_files]
@@ -265,6 +272,27 @@ def build_taxonomy(
         guidance_meta = apply_guidance(clades, g)
         guidance_meta["guided"] = True
 
+    w2v_dict: dict[str, Any] | None = None
+    sem_dict: dict[str, Any] | None = None
+    if include_semantic:
+        from codeevolve.taxonomy.semantic import apply_semantic_labels_to_clades, build_semantic_taxonomy
+
+        sem = build_semantic_taxonomy(
+            repo,
+            commits,
+            display=display or str(repo),
+            path_to_clade=path_to_clade,
+            clades=[c.to_dict() for c in clades],
+            max_files=min(400, max_files),
+            backend=vector_backend,
+            include_word2vec=True,
+        )
+        n_relabel = apply_semantic_labels_to_clades(clades, sem)
+        guidance_meta["semantic_relabeled"] = n_relabel
+        guidance_meta["vector_backend"] = sem.backend
+        w2v_dict = sem.word2vec.to_dict() if sem.word2vec else None
+        sem_dict = sem.to_dict()
+
     return TaxonomyReport(
         layers=dict(sorted(layers.items(), key=lambda x: -x[1])),
         languages=dict(sorted(langs.items(), key=lambda x: -x[1])),
@@ -274,4 +302,6 @@ def build_taxonomy(
         allocations=allocations,
         file_count=len(paths),
         guidance=guidance_meta,
+        word2vec=w2v_dict,
+        semantic=sem_dict,
     )
