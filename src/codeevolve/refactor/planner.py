@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from codeevolve.debt import DebtReport
+from codeevolve.refactor.effort import estimate_effort, expected_fitness_gain, priority_for
 from codeevolve.risk.weaknesses import RiskReport
 
 
@@ -66,31 +67,13 @@ class RefactorPlan:
 
 
 def _wave_for(kind: str) -> str:
-    if kind in {"revert_surface", "dependency_shock"}:
+    if kind in {"revert_surface", "dependency_shock", "selection_pressure"}:
         return "stabilize"
     if kind in {"hotspot_blast", "bus_factor", "hotspot_gravity", "circular_risk", "utility_sink"}:
         return "contain"
     if kind in {"test_gap", "low_fitness"} or "debt" in kind or kind.startswith("deprec"):
         return "pay_down"
     return "evolve"
-
-
-def _effort(severity: float) -> str:
-    if severity >= 0.75:
-        return "L"
-    if severity >= 0.5:
-        return "M"
-    return "S"
-
-
-def _priority(severity: float, wave: str) -> str:
-    if wave == "stabilize" or severity >= 0.8:
-        return "P0"
-    if severity >= 0.6:
-        return "P1"
-    if severity >= 0.4:
-        return "P2"
-    return "P3"
 
 
 def build_refactor_plan(risk: RiskReport, debt: DebtReport, *, backend: str = "heuristic") -> RefactorPlan:
@@ -106,17 +89,23 @@ def build_refactor_plan(risk: RiskReport, debt: DebtReport, *, backend: str = "h
             actions.append("Add tests for top hot files before new features")
         if fp.kind == "revert_surface":
             actions.append("Quarantine change surface behind feature flags if needed")
+        if fp.kind == "selection_pressure":
+            actions.append("Triage bug-labeled issues; reduce reopen loops before feature work")
         criteria = [
             f"Severity signal for {fp.id} reduced on next CodeEvolve run",
             "No new revert cluster on the same path in the following window",
         ]
         if fp.kind == "test_gap":
             criteria.append("Test touch ratio rises relative to production churn")
+        blast = 0.0
+        for ev in fp.evidence:
+            if isinstance(ev, dict) and "co_changers" in ev:
+                blast = min(1.0, float(ev["co_changers"]) / 40.0)
         steps.append(
             RefactorStep(
                 id=rid,
                 title=fp.title,
-                priority=_priority(fp.severity, wave),
+                priority=priority_for(fp.severity, wave),
                 wave=wave,
                 clade_ids=[fp.clade_id] if fp.clade_id else [],
                 paths=[fp.path] if fp.path else [],
@@ -124,8 +113,8 @@ def build_refactor_plan(risk: RiskReport, debt: DebtReport, *, backend: str = "h
                 evidence_refs=[fp.id],
                 actions=actions,
                 acceptance_criteria=criteria,
-                estimated_effort=_effort(fp.severity),
-                expected_fitness_gain=round(min(0.35, fp.severity * 0.4), 3),
+                estimated_effort=estimate_effort(fp.severity, blast),
+                expected_fitness_gain=expected_fitness_gain(fp.severity),
             )
         )
 

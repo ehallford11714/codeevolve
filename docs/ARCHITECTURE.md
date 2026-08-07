@@ -23,15 +23,15 @@ CLI / CodeEvolve(repo|github-url)
 
 | Package | Role |
 |---------|------|
-| `ingest/` | GitHub URL → `~/.codeevolve/repos` cache |
-| `taxonomy/` | Hierarchy + co-change clades + delta allocation |
-| `genetics/` | Lineage, gene flow, HGT suspects, fitness |
-| `ecology/` | Succession stages + Lehman proxies |
-| `risk/` | Weakness / failure ranking |
-| `refactor/` | Phased evidence-linked plan |
-| `models/` | Hardware ladder, backend router, HF/cloud |
+| `ingest/` | GitHub URL → cache; Issues/PR API selection pressure |
+| `taxonomy/` | Hierarchy + clades + regex symbol phylogeny |
+| `genetics/` | Rename-aware lineage, gene flow, fitness |
+| `ecology/` | Stages, niches, Lehman proxies |
+| `risk/` | Failure points + blast radius |
+| `refactor/` | Phased plan + effort heuristics |
+| `models/` | Hardware ladder, HF ensure, cloud backends |
 | `report/` | Drafted repo report |
-| `report_trend.py` | Trend planner (MVP) |
+| `report_trend.py` | Trend planner |
 
 ## Ecological stages
 

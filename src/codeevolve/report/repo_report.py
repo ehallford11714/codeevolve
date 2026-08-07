@@ -32,8 +32,11 @@ def _template(ctx: dict[str, Any]) -> str:
     g = ctx.get("genetics") or {}
     r = ctx.get("risk") or {}
     s = ctx.get("semantics") or {}
+    sym = ctx.get("symbols") or {}
+    sel = ctx.get("selection") or {}
     repo = ctx.get("repo", ".")
     lehman = e.get("lehman") or {}
+    niches = (e.get("niches") or {}).get("overcrowded") or []
     weaknesses = r.get("failure_points") or []
     weak_lines = "\n".join(
         f"- **{w.get('id')}** ({w.get('severity')}): {w.get('title')} — `{w.get('path')}`"
@@ -89,11 +92,30 @@ def _template(ctx: dict[str, Any]) -> str:
             (
                 f"Max generation={p.get('max_generation')}, branch_factor={p.get('branch_factor')}, "
                 f"merges={p.get('merge_count')}, hybridization={g.get('hybridization_events')}, "
-                f"HGT suspects={len(g.get('hgt_suspects') or [])}."
+                f"HGT suspects={len(g.get('hgt_suspects') or [])}, "
+                f"renames={g.get('rename_events')}."
             ),
             "",
             "### Clade stages",
             stage_lines,
+            "",
+            f"Overcrowded niches: {niches or 'none'}.",
+            "",
+            "## Symbols",
+            (
+                f"Engine={sym.get('engine')}, symbols={sym.get('symbol_count')}, "
+                f"kinds={sym.get('kind_counts')}."
+            ),
+            "",
+            "## Selection pressure (GitHub Issues/PRs)",
+            (
+                f"pressure_score={sel.get('pressure_score')}, "
+                f"bug_label_rate={sel.get('bug_label_rate')}, "
+                f"open_issues={sel.get('open_issues')}, "
+                f"pr_merge_rate={sel.get('pr_merge_rate')}."
+                if sel
+                else "_Not a GitHub remote / selection skipped._"
+            ),
             "",
             "## Debt & architectural mistakes",
             d.get("summary") or "No debt summary.",

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
+from codeevolve.genetics.fitness import file_fitness_map, mean_fitness
+from codeevolve.genetics.gene_flow import compute_gene_flow
 from codeevolve.gitlog import CommitRecord
 from codeevolve.taxonomy.tree import TaxonomyReport
 
@@ -18,6 +19,7 @@ class FileLineage:
     appearances: int
     clade_id: str
     fitness: float
+    prior_paths: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -27,6 +29,7 @@ class FileLineage:
             "appearances": self.appearances,
             "clade_id": self.clade_id,
             "fitness": self.fitness,
+            "prior_paths": list(self.prior_paths),
         }
 
 
@@ -35,7 +38,7 @@ class GeneFlowEdge:
     source_clade: str
     target_clade: str
     weight: int
-    kind: str  # cochange | merge_bridge | hgt_suspect
+    kind: str
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -53,6 +56,7 @@ class GeneticsReport:
     hybridization_events: int
     hgt_suspects: list[dict[str, Any]]
     mean_fitness: float
+    rename_events: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -62,34 +66,52 @@ class GeneticsReport:
             "hybridization_events": self.hybridization_events,
             "hgt_suspects": list(self.hgt_suspects[:30]),
             "mean_fitness": self.mean_fitness,
+            "rename_events": self.rename_events,
         }
 
 
 def analyze_genetics(commits: list[CommitRecord], taxonomy: TaxonomyReport) -> GeneticsReport:
-    # commits often newest-first; walk oldest→newest for birth
     ordered = sorted(commits, key=lambda c: c.timestamp)
     first: dict[str, str] = {}
     last: dict[str, str] = {}
-    counts: dict[str, int] = defaultdict(int)
-    revert_touch: dict[str, int] = defaultdict(int)
-    churn: dict[str, int] = defaultdict(int)
+    counts: dict[str, int] = {}
+    priors: dict[str, list[str]] = {}
+    rename_events = 0
+
+    # Track renames: map current identity through history
+    alias: dict[str, str] = {}  # old -> canonical latest name as we go forward
 
     for c in ordered:
-        share = (c.insertions + c.deletions) / max(1, len(c.files))
+        for old, new in c.renames:
+            rename_events += 1
+            canon = alias.get(old, old)
+            alias[old] = new
+            alias[new] = new
+            priors.setdefault(new, [])
+            if canon not in priors[new] and canon != new:
+                priors[new].append(canon)
+            if old in priors and old != new:
+                for p in priors[old]:
+                    if p not in priors[new]:
+                        priors[new].append(p)
         for f in c.files:
-            counts[f] += 1
-            churn[f] += int(share)
-            if f not in first:
-                first[f] = c.sha
-            last[f] = c.sha
-            if c.is_revert:
-                revert_touch[f] += 1
+            path = alias.get(f, f)
+            counts[path] = counts.get(path, 0) + 1
+            if path not in first:
+                first[path] = c.sha
+            last[path] = c.sha
 
+    fitness = file_fitness_map(commits)
     lineages: list[FileLineage] = []
     for path, n in counts.items():
-        # fitness: inverse of revert density and relative churn
-        rr = revert_touch[path] / max(1, n)
-        fitness = 1.0 / (1.0 + 2.0 * rr + 0.001 * churn[path] / max(1, n))
+        fit = fitness.get(path, {}).get("fitness")
+        if fit is None:
+            # try prior names
+            for p in priors.get(path, []):
+                if p in fitness:
+                    fit = fitness[p]["fitness"]
+                    break
+            fit = fit if fit is not None else 0.5
         lineages.append(
             FileLineage(
                 path=path,
@@ -97,46 +119,19 @@ def analyze_genetics(commits: list[CommitRecord], taxonomy: TaxonomyReport) -> G
                 last_sha=last[path],
                 appearances=n,
                 clade_id=taxonomy.path_to_clade.get(path, "clade_unknown"),
-                fitness=round(fitness, 4),
+                fitness=float(fit),
+                prior_paths=list(priors.get(path, [])),
             )
         )
     lineages.sort(key=lambda x: x.fitness)
 
-    flow: dict[tuple[str, str], int] = defaultdict(int)
-    hybrids = 0
-    hgt: list[dict[str, Any]] = []
-    for c in commits:
-        clades = {taxonomy.path_to_clade.get(f, "clade_unknown") for f in c.files}
-        clades.discard("clade_unknown")
-        if len(c.parents) > 1:
-            hybrids += 1
-        if len(clades) >= 2:
-            cl = sorted(clades)
-            for i, a in enumerate(cl):
-                for b in cl[i + 1 :]:
-                    flow[(a, b)] += 1
-            # HGT suspect: many files across clades with high churn in one commit
-            if len(c.files) >= 8 and (c.insertions + c.deletions) > 400:
-                hgt.append(
-                    {
-                        "sha": c.sha,
-                        "subject": c.subject,
-                        "clades": cl,
-                        "files": len(c.files),
-                        "churn": c.insertions + c.deletions,
-                        "kind": "hgt_suspect",
-                    }
-                )
-
-    edges = [
-        GeneFlowEdge(a, b, w, "cochange" if w < 5 else "merge_bridge")
-        for (a, b), w in sorted(flow.items(), key=lambda x: -x[1])[:80]
-    ]
-    mean_f = sum(x.fitness for x in lineages) / len(lineages) if lineages else 0.0
+    edges_raw, hybrids, hgt = compute_gene_flow(commits, taxonomy)
+    edges = [GeneFlowEdge(**e) for e in edges_raw]
     return GeneticsReport(
         lineages=lineages,
         gene_flow=edges,
         hybridization_events=hybrids,
-        hgt_suspects=hgt[:30],
-        mean_fitness=round(mean_f, 4),
+        hgt_suspects=hgt,
+        mean_fitness=mean_fitness(fitness),
+        rename_events=rename_events,
     )

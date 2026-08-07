@@ -80,6 +80,9 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 - [Tutorial](docs/TUTORIAL.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Metrics](docs/METRICS.md)
+- [Cloud / HF Qwen](docs/CLOUD.md)
+
+Phase E adds **symbol phylogeny** (`symbols`) and **GitHub Issues/PR selection pressure** (`selection`; set `GITHUB_TOKEN` for reliable API access).
 
 ## License
 

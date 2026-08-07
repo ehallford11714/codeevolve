@@ -24,6 +24,7 @@ class CommitRecord:
     files: list[str] = field(default_factory=list)
     insertions: int = 0
     deletions: int = 0
+    renames: list[tuple[str, str]] = field(default_factory=list)  # (old, new)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -39,6 +40,7 @@ class CommitRecord:
             "files": list(self.files),
             "insertions": self.insertions,
             "deletions": self.deletions,
+            "renames": [{"old": a, "new": b} for a, b in self.renames],
         }
 
 
@@ -69,15 +71,38 @@ def assert_git_repo(repo: Path) -> Path:
         raise RuntimeError(f"not a git repository: {repo}") from exc
 
 
-def _parse_numstat(repo: Path, sha: str) -> tuple[list[str], int, int]:
+_RENAME_RE = re.compile(r"^\{(.+?)\s*=>\s*(.+?)\}$|^(.+?)\s*=>\s*(.+)$")
+
+
+def _parse_rename_path(path: str) -> tuple[str, str | None]:
+    """Return (current_path, old_path_or_None) for git rename notations."""
+    # Forms: old => new  OR  dir/{old => new}/file
+    if "=>" not in path:
+        return path, None
+    if "{" in path and "}" in path:
+        pre, rest = path.split("{", 1)
+        mid, post = rest.split("}", 1)
+        m = re.match(r"^(.*?)\s*=>\s*(.*)$", mid.strip())
+        if m:
+            old = f"{pre}{m.group(1).strip()}{post}"
+            new = f"{pre}{m.group(2).strip()}{post}"
+            return new, old
+    m = re.match(r"^(.*?)\s*=>\s*(.*)$", path)
+    if m:
+        return m.group(2).strip(), m.group(1).strip()
+    return path, None
+
+
+def _parse_numstat(repo: Path, sha: str) -> tuple[list[str], int, int, list[tuple[str, str]]]:
     try:
-        raw = _run_git(repo, "show", "--numstat", "--format=", "--norelnotes", sha)
+        raw = _run_git(repo, "show", "-M", "--numstat", "--format=", "--norelnotes", sha)
     except RuntimeError:
         try:
-            raw = _run_git(repo, "show", "--numstat", "--format=", sha)
+            raw = _run_git(repo, "show", "-M", "--numstat", "--format=", sha)
         except RuntimeError:
-            return [], 0, 0
+            return [], 0, 0, []
     files: list[str] = []
+    renames: list[tuple[str, str]] = []
     ins = dels = 0
     for line in raw.splitlines():
         line = line.strip()
@@ -91,8 +116,11 @@ def _parse_numstat(repo: Path, sha: str) -> tuple[list[str], int, int]:
             ins += int(a)
         if b.isdigit():
             dels += int(b)
-        files.append(path)
-    return files, ins, dels
+        current, old = _parse_rename_path(path)
+        files.append(current)
+        if old:
+            renames.append((old, current))
+    return files, ins, dels, renames
 
 
 def load_commits(
@@ -141,8 +169,9 @@ def load_commits(
 
         files: list[str] = []
         ins = dels = 0
+        renames: list[tuple[str, str]] = []
         if with_numstat:
-            files, ins, dels = _parse_numstat(repo, sha)
+            files, ins, dels, renames = _parse_numstat(repo, sha)
 
         records.append(
             CommitRecord(
@@ -158,6 +187,7 @@ def load_commits(
                 files=files,
                 insertions=ins,
                 deletions=dels,
+                renames=renames,
             )
         )
     return records

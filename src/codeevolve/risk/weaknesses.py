@@ -10,7 +10,9 @@ from typing import Any
 from codeevolve.debt import DebtReport
 from codeevolve.genetics.lineage import GeneticsReport
 from codeevolve.gitlog import CommitRecord
+from codeevolve.ingest.github_api import SelectionPressure
 from codeevolve.metrics import MetricBundle
+from codeevolve.risk.blast_radius import cochange_degrees
 from codeevolve.taxonomy.tree import TaxonomyReport
 
 
@@ -57,12 +59,13 @@ def analyze_risk(
     taxonomy: TaxonomyReport,
     genetics: GeneticsReport,
     debt: DebtReport,
+    *,
+    selection: SelectionPressure | None = None,
 ) -> RiskReport:
     points: list[FailurePoint] = []
     n = max(1, len(commits))
 
-    # Hotspots / blast radius via co-change degree
-    co_degree: dict[str, set[str]] = defaultdict(set)
+    deg = cochange_degrees(commits)
     revert_files: dict[str, int] = defaultdict(int)
     authors_by_file: dict[str, set[str]] = defaultdict(set)
     test_touch = 0
@@ -77,14 +80,11 @@ def analyze_risk(
                 test_touch += 1
             else:
                 prod_touch += 1
-            for b in files:
-                if a != b:
-                    co_degree[a].add(b)
 
     for i, hot in enumerate(metrics.hot_files[:8]):
         path = hot["path"]
         touches = hot["touches"]
-        blast = len(co_degree.get(path, ()))
+        blast = deg.get(path, 0)
         sev = min(1.0, 0.35 + touches / n + blast / 40.0)
         points.append(
             FailurePoint(
@@ -175,6 +175,27 @@ def analyze_risk(
                     suggested_intervention="Refactor or isolate; reduce revert triggers",
                 )
             )
+
+    if selection and selection.pressure_score >= 0.35:
+        points.append(
+            FailurePoint(
+                id=f"W{len(points)+1}",
+                kind="selection_pressure",
+                severity=round(min(1.0, 0.4 + selection.pressure_score), 3),
+                path="(github issues/prs)",
+                clade_id="global",
+                title="Elevated external selection pressure (bugs/reopens/backlog)",
+                evidence=[
+                    {
+                        "pressure_score": selection.pressure_score,
+                        "bug_label_rate": selection.bug_label_rate,
+                        "open_issues": selection.open_issues,
+                        "reopened_like": selection.reopened_like,
+                    }
+                ],
+                suggested_intervention="Prioritize bug triage and reopen reduction before expanding scope",
+            )
+        )
 
     for m in debt.architectural_mistakes:
         mid = m.get("id", "arch")

@@ -1,4 +1,4 @@
-"""Per-clade ecological stages + Lehman law proxies."""
+"""Per-clade ecological stages + Lehman law proxies + niches."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
+from codeevolve.ecology.lehman import LehmanScores, compute_lehman
+from codeevolve.ecology.niches import NicheReport, analyze_niches
 from codeevolve.gitlog import CommitRecord
 from codeevolve.metrics import MetricBundle
 from codeevolve.phylogeny import EcologicalStage, analyze_phylogeny
@@ -33,31 +35,12 @@ class CladeStage:
 
 
 @dataclass
-class LehmanScores:
-    continuing_change: float
-    increasing_complexity: float
-    continuing_growth: float
-    declining_quality: float
-    conservation_of_familiarity: float
-    feedback_volatility: float
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "continuing_change": self.continuing_change,
-            "increasing_complexity": self.increasing_complexity,
-            "continuing_growth": self.continuing_growth,
-            "declining_quality": self.declining_quality,
-            "conservation_of_familiarity": self.conservation_of_familiarity,
-            "feedback_volatility": self.feedback_volatility,
-        }
-
-
-@dataclass
 class EcologyReport:
     global_stage: EcologicalStage
     stage_rationale: str
     clade_stages: list[CladeStage]
     lehman: LehmanScores
+    niches: NicheReport
     timeline: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -66,6 +49,7 @@ class EcologyReport:
             "stage_rationale": self.stage_rationale,
             "clade_stages": [c.to_dict() for c in self.clade_stages],
             "lehman": self.lehman.to_dict(),
+            "niches": self.niches.to_dict(),
             "timeline": list(self.timeline),
         }
 
@@ -86,38 +70,12 @@ def _clade_stage(churn: int, touches: int, revert_frac: float, n_files: int) -> 
     return "growth", "Default expansion pattern"
 
 
-def _lehman(commits: list[CommitRecord], metrics: MetricBundle) -> LehmanScores:
-    n = max(1, len(commits))
-    ordered = sorted(commits, key=lambda c: c.timestamp)
-    mid = max(1, n // 2)
-    early, late = ordered[:mid], ordered[mid:]
-    early_files = {f for c in early for f in c.files}
-    late_files = {f for c in late for f in c.files}
-    growth = len(late_files - early_files) / max(1, len(early_files | late_files))
-    complexity = min(1.0, metrics.file_touch_entropy / 6.0)
-    quality_decline = min(1.0, metrics.revert_rate * 2.5 + (1.0 - metrics.code_stability) * 0.5)
-    # familiarity: bounded novelty — new file fraction in late window
-    familiarity = 1.0 - min(1.0, growth)
-    # feedback volatility: |momentum|
-    feedback = min(1.0, abs(metrics.momentum) / 2.0)
-    continuing = min(1.0, metrics.avg_churn_per_commit / 200.0)
-    return LehmanScores(
-        continuing_change=round(continuing, 4),
-        increasing_complexity=round(complexity, 4),
-        continuing_growth=round(growth, 4),
-        declining_quality=round(quality_decline, 4),
-        conservation_of_familiarity=round(familiarity, 4),
-        feedback_volatility=round(feedback, 4),
-    )
-
-
 def analyze_ecology(
     commits: list[CommitRecord],
     metrics: MetricBundle,
     taxonomy: TaxonomyReport,
 ) -> EcologyReport:
     phy = analyze_phylogeny(commits, metrics)
-    # per-clade stats
     clade_churn: dict[str, int] = defaultdict(int)
     clade_touch: dict[str, int] = defaultdict(int)
     clade_reverts: dict[str, int] = defaultdict(int)
@@ -151,7 +109,6 @@ def analyze_ecology(
         )
     clade_stages.sort(key=lambda x: -x.churn)
 
-    # coarse timeline by thirds
     ordered = sorted(commits, key=lambda c: c.timestamp)
     timeline: list[dict[str, Any]] = []
     if ordered:
@@ -175,6 +132,7 @@ def analyze_ecology(
         global_stage=phy.current_stage,
         stage_rationale=phy.stage_rationale,
         clade_stages=clade_stages,
-        lehman=_lehman(commits, metrics),
+        lehman=compute_lehman(commits, metrics),
+        niches=analyze_niches(taxonomy),
         timeline=timeline,
     )

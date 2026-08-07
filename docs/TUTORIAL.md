@@ -93,7 +93,22 @@ print(r.refactor_plan.steps[0].evidence_refs)
 Path("repo_report.md").write_text(r.repo_report.markdown, encoding="utf-8")
 ```
 
+## 8. Symbols & GitHub selection pressure (Phase E)
+
+```powershell
+python -m codeevolve --repo . symbols
+python -m codeevolve --repo pallets/flask selection
+# authenticated (recommended):
+$env:GITHUB_TOKEN = "ghp_..."
+python -m codeevolve --repo pallets/flask analyze --out report.json
+```
+
+Symbols are extracted with language-aware regex (Python/JS/TS/Go/Rust). Selection pressure scores bug labels, reopen-like language, open backlog, and PR merge rate — and can create a `selection_pressure` failure point that feeds the refactor **stabilize** wave.
+
+See also [CLOUD.md](CLOUD.md) for HF Qwen / cloud routing.
+
 ## Related
 
 - [ARCHITECTURE.md](ARCHITECTURE.md)
 - [METRICS.md](METRICS.md)
+- [CLOUD.md](CLOUD.md)
