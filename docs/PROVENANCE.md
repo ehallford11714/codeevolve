@@ -114,19 +114,20 @@ Absence of evidence → stance `insufficient`. Do not invent motive.
 python -m codeevolve provenance --schema
 python -m codeevolve provenance --schema-out schemas
 python -m codeevolve evaluate --suite dynamics
-# JSON-lines tool server:
-python -m codeevolve.mcp.server
+# MCP stdio (Cursor / hosts) — see docs/MCP.md
+python -m codeevolve.mcp
 ```
 
 | Tool | Does |
 |------|------|
+| `analyze_repo` | Live analyze path / GitHub → report + pack |
 | `provenance_pack` | Deliberation pack |
 | `provenance_expand_frame` | Frame + evidence + chain |
 | `provenance_path_pack` | Path-centric pack |
 | `provenance_resolve` | Evidence walk |
 | `provenance_timeline` | Chronological slice |
 
-Files: `schemas/deliberation_pack.schema.json`, `schemas/mcp_tools.json`.
+Files: `schemas/deliberation_pack.schema.json`, `schemas/mcp_tools.json`. Cursor: `.cursor/mcp.json` + `.cursor/skills/codeevolve/SKILL.md`.
 
 ## Python
 

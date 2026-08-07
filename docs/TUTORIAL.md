@@ -189,14 +189,14 @@ python -m codeevolve provenance --from-report report.json --frame frame:delta:re
 
 ## 12. Schema, MCP tools, and eval
 
-**Why:** packs must be stable for agents. JSON Schema validates shape; MCP-shaped tools expose pack / expand / path / resolve / timeline without inventing a new API language.
+**Why:** packs must be stable for agents. JSON Schema validates shape; MCP exposes `analyze_repo` plus pack / expand / path / resolve / timeline (see [MCP.md](MCP.md)).
 
 ```powershell
 python -m codeevolve provenance --schema-out schemas
 python -m codeevolve evaluate --suite dynamics   # real public tags only
 python examples/demo_dynamics.py                 # Click@8.4.0 walkthrough
 # optional JSON-lines tool server:
-# python -m codeevolve.mcp.server
+# python -m codeevolve.mcp
 ```
 
 See [DEMO_DYNAMICS.md](DEMO_DYNAMICS.md) and [EVAL.md](EVAL.md).

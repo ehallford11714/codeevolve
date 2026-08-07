@@ -24,6 +24,23 @@ pip install -e ".[dev]"
 # pip install -e ".[hf]"
 ```
 
+## For agents (MCP)
+
+**Start here:** [AGENTS.md](AGENTS.md) · details: [docs/MCP.md](docs/MCP.md)
+
+```powershell
+pip install -e .                    # or: pip install "git+https://github.com/ehallford11714/codeevolve.git"
+python -m codeevolve.mcp            # stdio MCP server (also: codeevolve-mcp)
+```
+
+| Connect | Path |
+|---------|------|
+| Cursor MCP config | [`.cursor/mcp.json`](.cursor/mcp.json) |
+| Agent skill | [`.cursor/skills/codeevolve/SKILL.md`](.cursor/skills/codeevolve/SKILL.md) |
+| Tool loop | `analyze_repo` → `provenance_pack` → `provenance_expand_frame` / `provenance_path_pack` |
+
+Agents should deliberate from frames (`claim → evidence → falsifier`), not invent history.
+
 ## Quick start
 
 ```powershell
@@ -86,6 +103,8 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 
 ## Docs
 
+- [AGENTS.md](AGENTS.md) — **agent connection** (install, MCP, tools, rules)
+- [MCP guide](docs/MCP.md) — Cursor/`mcp.json`, tool loop, CLI fallbacks
 - [Tutorial](docs/TUTORIAL.md) — end-to-end workflow incl. provenance & dynamics
 - [Architecture](docs/ARCHITECTURE.md) — pipeline and package map
 - [Provenance / deliberation](docs/PROVENANCE.md) — ledger, frames, MCP/schema
@@ -97,7 +116,7 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 - [Hierarchy](docs/HIERARCHY.md) · [RAG](docs/RAG.md) · [Semantic](docs/SEMANTIC.md)
 - [Cloud / HF Qwen](docs/CLOUD.md)
 
-**0.16** adds blast/symbol/CST micro-provenance, deliberation **JSON Schema + MCP tools**, and `evaluate --suite dynamics`. **0.15** state trajectory / selection / diffs. See [docs/PROVENANCE.md](docs/PROVENANCE.md).
+**0.17** — stdio MCP, Cursor `mcp.json` + skill, [AGENTS.md](AGENTS.md). **0.16** — micro-provenance + schemas + dynamics eval.
 
 ```powershell
 python -m codeevolve --repo . provenance --pack --frame frame:basin

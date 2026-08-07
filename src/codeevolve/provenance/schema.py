@@ -86,9 +86,40 @@ DELIBERATION_PACK_SCHEMA: dict[str, Any] = {
 
 MCP_TOOLS: list[dict[str, Any]] = [
     {
+        "name": "analyze_repo",
+        "description": (
+            "Analyze a local path or GitHub repo/url with CodeEvolve. Writes report.json "
+            "(and optional deliberation pack). Use this first before provenance_* tools "
+            "when parsing an unfamiliar codebase."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["repo"],
+            "properties": {
+                "repo": {
+                    "type": "string",
+                    "description": "Local path, owner/name, or https://github.com/… URL",
+                },
+                "max_commits": {"type": "integer", "default": 200},
+                "out": {
+                    "type": "string",
+                    "description": "Where to write report.json (default: .codeevolve/report.json under cwd or repo)",
+                },
+                "pack_out": {
+                    "type": "string",
+                    "description": "Optional path to write deliberation pack JSON",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Optional path focus included in returned pack",
+                },
+            },
+        },
+    },
+    {
         "name": "provenance_pack",
         "description": (
-            "Build a deliberation pack from a CodeEvolve report.json or live analyze. "
+            "Build a deliberation pack from a CodeEvolve report.json. "
             "Returns frames with claim→evidence→falsifier for agent deliberation."
         ),
         "inputSchema": {
@@ -114,7 +145,10 @@ MCP_TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "provenance_path_pack",
-        "description": "Path-centric provenance: lineage, episodes, graph links, related frames.",
+        "description": (
+            "Path-centric provenance for a file/dir: lineage, episodes, blast, symbols, frames. "
+            "Use before editing a hotspot."
+        ),
         "inputSchema": {
             "type": "object",
             "required": ["path"],
@@ -140,7 +174,7 @@ MCP_TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "provenance_timeline",
-        "description": "Chronological provenance slice (state samples + events).",
+        "description": "Chronological provenance slice (state samples + lifecycle events).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -243,15 +277,89 @@ def validate_deliberation_pack(pack: dict[str, Any]) -> list[str]:
     return _check(pack, DELIBERATION_PACK_SCHEMA)
 
 
+def _default_report_path(repo: str) -> Path:
+    p = Path(repo)
+    if p.exists():
+        return p / ".codeevolve" / "report.json"
+    return Path.cwd() / ".codeevolve" / "report.json"
+
+
+def _run_analyze(arguments: dict[str, Any]) -> dict[str, Any]:
+    import os
+
+    from codeevolve.api import CodeEvolve
+    from codeevolve.provenance.ledger import build_provenance_ledger
+
+    os.environ.setdefault("CODEEVOLVE_SKIP_HF", "1")
+    os.environ.setdefault("CODEEVOLVE_SKIP_EMBED", "1")
+    os.environ.setdefault("CODEEVOLVE_TAXONOMY_HEURISTIC", "1")
+    os.environ.setdefault("CODEEVOLVE_SKIP_GHSA", "1")
+
+    repo = str(arguments.get("repo") or "")
+    if not repo:
+        return {"error": "repo required"}
+    max_commits = int(arguments.get("max_commits") or 200)
+    out = Path(arguments["out"]) if arguments.get("out") else _default_report_path(repo)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    report = CodeEvolve(repo).analyze(
+        max_commits=max_commits,
+        use_llm=False,
+        ensure_slm=False,
+        include_selection=bool(arguments.get("include_selection", False)),
+        write_report=False,
+        include_repo_report=False,
+        include_hardware=False,
+        include_cst=False,
+        include_clones=False,
+        include_reticulation=False,
+        include_fork_lineage=False,
+        include_semantic=False,
+        include_rag=False,
+    )
+    data = report.to_dict()
+    out.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+    ledger = report.provenance or build_provenance_ledger(data)
+    pack = ledger.deliberation_pack(path=arguments.get("path"))
+    pack_out = arguments.get("pack_out")
+    if pack_out:
+        Path(pack_out).write_text(json.dumps(pack, indent=2, default=str), encoding="utf-8")
+    return {
+        "repo": report.repo,
+        "report_path": str(out.resolve()),
+        "pack_out": str(Path(pack_out).resolve()) if pack_out else None,
+        "commit_count": report.commit_count,
+        "dynamics_summary": (report.dynamics or {}).get("summary"),
+        "stage": report.ecology.global_stage if report.ecology else None,
+        "frame_ids": [f.id for f in ledger.frames[:12]],
+        "pack": pack,
+        "howto": (
+            "Next: provenance_expand_frame / provenance_path_pack / provenance_resolve "
+            f"with from_report={out}"
+        ),
+    }
+
+
 def dispatch_mcp_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-    """Execute an MCP-shaped tool against a report path or inline report dict."""
+    """Execute an MCP-shaped tool against a report path, live analyze, or inline report."""
     from codeevolve.provenance.ledger import build_provenance_ledger, query_provenance
+
+    if name == "analyze_repo":
+        return _run_analyze(arguments)
 
     report = arguments.get("report")
     if report is None:
         path = arguments.get("from_report")
         if not path:
-            return {"error": "from_report or report required"}
+            # convenience: default report location
+            guess = Path.cwd() / ".codeevolve" / "report.json"
+            if guess.is_file():
+                path = str(guess)
+            else:
+                return {
+                    "error": "from_report required (or run analyze_repo first)",
+                    "hint": "analyze_repo → provenance_pack with from_report",
+                }
         report = json.loads(Path(path).read_text(encoding="utf-8"))
     ledger = build_provenance_ledger(report)
 

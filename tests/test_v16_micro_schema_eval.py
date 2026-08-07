@@ -80,7 +80,8 @@ def test_schema_and_mcp(tmp_path):
     out = dispatch_mcp_tool("provenance_pack", {"from_report": str(report_path)})
     assert "frames" in out
     listed = handle({"method": "tools/list"})
-    assert len(listed["tools"]) >= 4
+    assert len(listed["tools"]) >= 5
+    assert any(t["name"] == "analyze_repo" for t in listed["tools"])
 
 
 def test_dynamics_catalog_is_real_tags_only():

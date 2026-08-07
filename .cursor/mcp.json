@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "codeevolve": {
+      "command": "python",
+      "args": ["-m", "codeevolve.mcp"],
+      "env": {
+        "CODEEVOLVE_SKIP_HF": "1",
+        "CODEEVOLVE_SKIP_EMBED": "1",
+        "CODEEVOLVE_TAXONOMY_HEURISTIC": "1",
+        "CODEEVOLVE_SKIP_GHSA": "1",
+        "PYTHONUTF8": "1"
+      }
+    }
+  }
+}

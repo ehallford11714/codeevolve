@@ -46,7 +46,7 @@ CLI / CodeEvolve(repo|github-url)
 | `genetics/` | Rename-aware lineage, gene flow, fitness, clones, reticulation, alleles |
 | `risk/` | Failure points + blast radius + coupling + dependencies |
 | `provenance/` | Dynamics + ledger + schema/MCP dispatch |
-| `mcp/` | JSON-lines tool server over provenance ops |
+| `mcp/` | Stdio MCP server (Content-Length JSON-RPC) + JSONL legacy mode |
 | `eval/` | Synthetic, taxonomy gold, ecology, **dynamics**, public scorecard |
 | `refactor/` | Phased plan + effort heuristics |
 | `models/` | Tiers (slm→frontier), SLM taxonomy guide, HF/cloud |
@@ -75,7 +75,7 @@ Stages are computed **globally** and **per clade**, then optionally **recalibrat
 | `report.provenance` | Full ledger + frames |
 | `provenance` CLI | pack / path-pack / frame / resolve / timeline / schema |
 | `schemas/` | Deliberation pack JSON Schema + MCP tool list |
-| `codeevolve.mcp.server` | Stdio JSON-lines tool calls |
+| `python -m codeevolve.mcp` | MCP stdio (`analyze_repo` + provenance_*) |
 
 Rationale and kinds: [PROVENANCE.md](PROVENANCE.md).
 
