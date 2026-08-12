@@ -133,6 +133,38 @@
       }
     },
     {
+      "name": "viz_phylogeny",
+      "description": "Render phylogeny / clade / Fitch parsimony / gene-flow SVG+HTML from a report.json. Writes a gallery (or SVG/Newick). Use after analyze_repo. Does not invent history \u2014 colors and steps come from allocations + the commit DAG.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "from_report": {
+            "type": "string",
+            "description": "Path to report.json"
+          },
+          "out": {
+            "type": "string",
+            "description": "HTML/SVG/JSON/Newick file or directory (default .codeevolve/viz.html)"
+          },
+          "kind": {
+            "type": "string",
+            "default": "all",
+            "description": "all | phylogeny | clades | parsimony | gene-flow"
+          },
+          "format": {
+            "type": "string",
+            "default": "html",
+            "description": "html | svg | json | newick"
+          },
+          "collapse_unary": {
+            "type": "boolean",
+            "default": false,
+            "description": "Hide unary same-clade chains on large DAGs"
+          }
+        }
+      }
+    },
+    {
       "name": "evolve_toward_objective",
       "description": "Run the native CodeEvolve coding agent: analyze \u2192 provenance frames \u2192 bounded proposal/edits \u2192 re-score against an objective. Default is dry-run (proposals only); set apply=true to write files.",
       "inputSchema": {

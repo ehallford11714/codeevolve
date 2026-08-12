@@ -39,7 +39,7 @@ This repo ships [`.cursor/mcp.json`](../.cursor/mcp.json):
 1. Open the repo in Cursor (or merge the `mcpServers.codeevolve` block into your user MCP config).
 2. Ensure `python -m codeevolve.mcp --help` works in that environment.
 3. Reload MCP / restart Cursor.
-4. Confirm tools: `analyze_repo`, `provenance_pack`, `provenance_expand_frame`, `provenance_path_pack`, `provenance_resolve`, `provenance_timeline`, `evolve_toward_objective`.
+4. Confirm tools: `analyze_repo`, `provenance_pack`, `provenance_expand_frame`, `provenance_path_pack`, `provenance_resolve`, `provenance_timeline`, `viz_phylogeny`, `evolve_toward_objective`.
 
 Agent skill (project): [`.cursor/skills/codeevolve/SKILL.md`](../.cursor/skills/codeevolve/SKILL.md). Objective agent: [AGENT.md](AGENT.md).
 
@@ -53,6 +53,7 @@ Agent skill (project): [`.cursor/skills/codeevolve/SKILL.md`](../.cursor/skills/
 | 4 | `provenance_path_pack` | Before editing a hotspot path |
 | 5 | `provenance_resolve` / `provenance_timeline` | Walk evidence / chronology |
 | 6 | `evolve_toward_objective` | Dry-run or apply bounded improvements scored by re-analysis |
+| 7 | `viz_phylogeny` | Phylogeny / clades / Fitch parsimony / gene-flow from `report.json` |
 
 `analyze_repo` arguments:
 
@@ -79,6 +80,8 @@ Stdio uses MCP JSON-RPC with `Content-Length` framing (no extra MCP SDK dependen
 ```powershell
 python -m codeevolve --repo . analyze --out .codeevolve/report.json
 python -m codeevolve provenance --from-report .codeevolve/report.json --pack
+python -m codeevolve viz --report .codeevolve/report.json --out .codeevolve/viz.html
+python -m codeevolve viz --report .codeevolve/report.json --out .codeevolve/builder.html --kind 3d
 python -m codeevolve provenance --schema-out schemas
 ```
 

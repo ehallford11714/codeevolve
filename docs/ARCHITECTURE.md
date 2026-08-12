@@ -22,7 +22,7 @@ CLI / CodeEvolve(repo|github-url)
         ├─ report.write_trend_report
         ├─ report.write_repo_report     (includes provenance frame summary)
         ├─ refactor.build_refactor_plan
-        ├─ pr_comment / dashboard / ci  (surface frames + diffs)
+        ├─ pr_comment / dashboard / viz / ci  (surface frames + phylogeny)
         └─ models.hardware / backends   (heuristic | hf-qwen | cloud)
 ```
 
@@ -34,7 +34,7 @@ CLI / CodeEvolve(repo|github-url)
 | Ecology calibration after raw stages | Events/CPs relabel regimes without throwing away heuristics as fallback |
 | Dynamics after ecology + fatigue/selection | Trajectory needs monthly series *and* process forcing coordinates |
 | Provenance last among analyzers | Ledger is a projection for deliberation, not a new sensor |
-| Report/PR/dashboard after provenance | Human surfaces should cite the same `frame:*` ids agents resolve |
+| Report/PR/dashboard/viz after provenance | Human surfaces should cite the same `frame:*` ids agents resolve |
 
 ## Package layout
 
@@ -48,7 +48,8 @@ CLI / CodeEvolve(repo|github-url)
 | `provenance/` | Dynamics + ledger + schema/MCP dispatch |
 | `mcp/` | Stdio MCP server (Content-Length JSON-RPC) + JSONL legacy mode |
 | `agent/` | Cognitive coding agent (memory, RAG, morphemes, reflect/act/compact, kernel subagents, tools) |
-| `eval/` | Synthetic, taxonomy gold, ecology, **dynamics**, public scorecard |
+| `eval/` | Synthetic, taxonomy gold, ecology, **dynamics**, public scorecard, agent outcomes |
+| `viz/` | 3D phylogeny builder (intent + analysis) + clade tree + Fitch parsimony + gene-flow |
 | `refactor/` | Phased plan + effort heuristics |
 | `models/` | Tiers (slm→frontier), SLM taxonomy guide, HF/cloud |
 | `psychology/` | Fatigue / sprint rhythm + cognitive-load proxies |
@@ -76,7 +77,8 @@ Stages are computed **globally** and **per clade**, then optionally **recalibrat
 | `report.provenance` | Full ledger + frames |
 | `provenance` CLI | pack / path-pack / frame / resolve / timeline / schema |
 | `schemas/` | Deliberation pack JSON Schema + MCP tool list |
-| `python -m codeevolve.mcp` | MCP stdio (`analyze_repo` + provenance_* + `evolve_toward_objective`) |
+| `python -m codeevolve.mcp` | MCP stdio (`analyze_repo` + provenance_* + `viz_phylogeny` + `evolve_toward_objective`) |
+| `python -m codeevolve viz` | 3D phylogeny builder (intent/analysis) + 2D clade/parsimony/gene-flow |
 | `python -m codeevolve.agent` | Objective improve loop (dry-run or `--apply`) |
 
 Rationale and kinds: [PROVENANCE.md](PROVENANCE.md).

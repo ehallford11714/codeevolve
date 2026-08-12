@@ -14,6 +14,7 @@ def test_tool_catalog_includes_analyze_repo():
     names = {t["name"] for t in MCP_TOOLS}
     assert "analyze_repo" in names
     assert "provenance_pack" in names
+    assert "viz_phylogeny" in names
     listed = handle({"method": "tools/list"})
     assert {t["name"] for t in listed["tools"]} == names
 

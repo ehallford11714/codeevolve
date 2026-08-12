@@ -432,6 +432,19 @@ class CodeEvolve:
         return write_dashboard(report, path)
 
     @staticmethod
+    def write_viz(
+        report: Any,
+        path: Path | str,
+        *,
+        kind: str = "all",
+        fmt: str = "html",
+        collapse_unary: bool = False,
+    ) -> Path:
+        from codeevolve.viz.write import write_viz as _write_viz
+
+        return _write_viz(report, path, kind=kind, fmt=fmt, collapse_unary=collapse_unary)
+
+    @staticmethod
     def evaluate(
         work_dir: Path | str | None = None,
         *,

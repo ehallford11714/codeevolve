@@ -8,8 +8,8 @@ description: >-
   bounded improvements scored by re-analysis. Use when the user wants to parse
   a codebase's evolution, improve toward an objective, understand why hotspots
   exist, compare reports over time, prepare a path fence pack before edits, or
-  connect MCP tools named analyze_repo / provenance_* / evolve_toward_objective.
-  Prefer evidence packs over inventing rationale.
+  connect MCP tools named analyze_repo / provenance_* / viz_phylogeny /
+  evolve_toward_objective. Prefer evidence packs over inventing rationale.
 ---
 
 # CodeEvolve — evolutionary provenance for agents
@@ -19,6 +19,7 @@ CodeEvolve does **not** invent “why this line exists.” It builds a **history
 ## When to use
 
 - User asks how a repo evolved, what stage it is in, or what is risky to touch
+- User wants a phylogeny / clade / parsimony picture of the codebase (`viz_phylogeny`)
 - Before large refactors: need path-centric provenance (blast, episodes, frames)
 - PR/CI: compare current analyze to a previous `report.json`
 - MCP tools `analyze_repo` or `provenance_*` are available
@@ -39,7 +40,7 @@ pip install -e "path\to\codeevolve"
 pip install "git+https://github.com/ehallford11714/codeevolve.git"
 ```
 
-Reload MCP / restart Cursor after install. Tools: `analyze_repo`, `provenance_*`, `evolve_toward_objective`, `spawn_kernel_subagents`, `agent_cognition_info`.
+Reload MCP / restart Cursor after install. Tools: `analyze_repo`, `provenance_*`, `viz_phylogeny`, `evolve_toward_objective`, `spawn_kernel_subagents`, `agent_cognition_info`.
 
 ## Standard workflow
 
@@ -75,6 +76,8 @@ python -m codeevolve --repo . analyze --out .codeevolve/report.json
 python -m codeevolve provenance --from-report .codeevolve/report.json --pack
 python -m codeevolve provenance --from-report .codeevolve/report.json --path-pack src/api.py
 python -m codeevolve provenance --from-report .codeevolve/report.json --frame frame:basin
+python -m codeevolve viz --report .codeevolve/report.json --out .codeevolve/viz.html
+python -m codeevolve viz --report .codeevolve/report.json --out .codeevolve/builder.html --kind 3d
 python examples/demo_dynamics.py
 ```
 
@@ -93,4 +96,5 @@ python examples/demo_dynamics.py
 - `docs/DYNAMICS.md` — state trajectory
 - `docs/DEMO_DYNAMICS.md` — real-tag demo
 - `docs/MCP.md` — MCP setup
+- `docs/VIZ.md` — phylogeny / clade / parsimony gallery
 - `docs/TUTORIAL.md` — end-to-end

@@ -59,6 +59,7 @@ PYTHONUTF8=1
 | Improve | `evolve_toward_objective` | `repo`, `objective`, optional `path`, `max_rounds`, `apply`, cognition/spawn flags |
 | Kernels | `spawn_kernel_subagents` | Spawn stabilize/contain/pay_down/investigate/search/… subagents |
 | Cognition | `agent_cognition_info` | Memory/RAG/morpheme/tools/kernel catalog |
+| Viz | `viz_phylogeny` | Phylogeny / clades / Fitch parsimony / gene-flow HTML+SVG |
 
 Default report path if `out` omitted: `.codeevolve/report.json`.
 
@@ -87,6 +88,8 @@ python -m codeevolve --repo <path|owner/repo> analyze --out .codeevolve/report.j
 python -m codeevolve provenance --from-report .codeevolve/report.json --pack
 python -m codeevolve provenance --from-report .codeevolve/report.json --path-pack src/api.py
 python -m codeevolve provenance --from-report .codeevolve/report.json --frame frame:basin
+python -m codeevolve viz --report .codeevolve/report.json --out .codeevolve/viz.html
+python -m codeevolve viz --report .codeevolve/report.json --out .codeevolve/builder.html --kind 3d
 python -m codeevolve --repo <path|owner/repo> agent --objective reduce_debt --max-rounds 2
 python -m codeevolve.agent --repo . --objective follow_refactor --apply --verify-cmd "pytest -q"
 ```

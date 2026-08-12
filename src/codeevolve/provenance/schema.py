@@ -185,6 +185,39 @@ MCP_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "viz_phylogeny",
+        "description": (
+            "Render 3D phylogeny builder (intent + analysis) or 2D clade / Fitch / gene-flow "
+            "SVG+HTML from a report.json. Writes a gallery (or SVG/Newick). Use after analyze_repo. "
+            "Does not invent history — colors, intent, and steps come from subjects + allocations + the commit DAG."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "from_report": {"type": "string", "description": "Path to report.json"},
+                "out": {
+                    "type": "string",
+                    "description": "HTML/SVG/JSON/Newick file or directory (default .codeevolve/viz.html)",
+                },
+                "kind": {
+                    "type": "string",
+                    "default": "all",
+                    "description": "all | 3d | phylogeny | clades | parsimony | gene-flow",
+                },
+                "format": {
+                    "type": "string",
+                    "default": "html",
+                    "description": "html | svg | json | newick",
+                },
+                "collapse_unary": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Hide unary same-clade chains on large DAGs",
+                },
+            },
+        },
+    },
+    {
         "name": "evolve_toward_objective",
         "description": (
             "Run the native CodeEvolve coding agent: analyze → provenance frames → "
@@ -603,6 +636,38 @@ def dispatch_mcp_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             "objective": obj.to_dict(),
             "subagents": [r.to_dict() for r in results],
             "count": len(results),
+        }
+    if name == "viz_phylogeny":
+        from codeevolve.viz import build_model, write_viz
+
+        report = arguments.get("report")
+        if report is None:
+            path = arguments.get("from_report")
+            if not path:
+                guess = Path.cwd() / ".codeevolve" / "report.json"
+                if guess.is_file():
+                    path = str(guess)
+                else:
+                    return {
+                        "error": "from_report required (or run analyze_repo first)",
+                        "hint": "analyze_repo → viz_phylogeny with from_report",
+                    }
+            report = json.loads(Path(path).read_text(encoding="utf-8"))
+        out = str(arguments.get("out") or (Path.cwd() / ".codeevolve" / "viz.html"))
+        written = write_viz(
+            report,
+            out,
+            kind=str(arguments.get("kind") or "all"),
+            fmt=str(arguments.get("format") or "html"),
+            collapse_unary=bool(arguments.get("collapse_unary", False)),
+        )
+        model = build_model(report)
+        return {
+            "out": str(written),
+            "kind": arguments.get("kind") or "all",
+            "node_count": model.node_count,
+            "truncated": model.truncated,
+            "parsimony": model.parsimony.to_dict(),
         }
 
     report = arguments.get("report")

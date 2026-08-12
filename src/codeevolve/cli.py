@@ -45,6 +45,11 @@ def main(argv: list[str] | None = None) -> int:
     an.add_argument("--report-out", default=None)
     an.add_argument("--refactor-out", default=None)
     an.add_argument("--dashboard-out", default=None, help="Write HTML clade×drift×fatigue dashboard")
+    an.add_argument(
+        "--viz-out",
+        default=None,
+        help="Write phylogeny/clade/parsimony gallery (HTML file or directory)",
+    )
     an.add_argument("--previous", default=None, help="Prior report.json for diff")
     an.add_argument("--diff-out", default=None)
     an.add_argument("--no-report", action="store_true")
@@ -136,6 +141,18 @@ def main(argv: list[str] | None = None) -> int:
     dash = sub.add_parser("dashboard", help="Build HTML dashboard from report JSON")
     dash.add_argument("--report", required=True)
     dash.add_argument("--out", default="codeevolve_dashboard.html")
+
+    vz = sub.add_parser("viz", help="Phylogeny / clade / Fitch parsimony / gene-flow HTML+SVG")
+    vz.add_argument("--report", "--from-report", dest="report", default=None, help="report.json (default .codeevolve/report.json)")
+    vz.add_argument("--out", default="codeevolve_viz.html", help="HTML/SVG/JSON/Newick file, or a directory")
+    vz.add_argument(
+        "--kind",
+        default="all",
+        choices=["all", "3d", "phylogeny", "clades", "parsimony", "gene-flow"],
+        help="Scene to render (all = HTML gallery with 3D builder first)",
+    )
+    vz.add_argument("--format", dest="fmt", default="html", choices=["html", "svg", "json", "newick"])
+    vz.add_argument("--collapse-unary", action="store_true", help="Hide unary same-clade chains")
 
     ev = sub.add_parser("evaluate", help="Run evaluation (synthetic + taxonomy gold + public scorecard)")
     ev.add_argument("--work-dir", default=None, help="Scratch dir for fixtures (default .codeevolve_eval)")
@@ -398,6 +415,21 @@ def main(argv: list[str] | None = None) -> int:
         print(args.out)
         return 0
 
+    if args.cmd == "viz":
+        from codeevolve.viz import write_viz
+
+        report_path = args.report or str(Path(".codeevolve") / "report.json")
+        cur = json.loads(Path(report_path).read_text(encoding="utf-8"))
+        out = write_viz(
+            cur,
+            args.out,
+            kind=args.kind,
+            fmt=args.fmt,
+            collapse_unary=bool(args.collapse_unary),
+        )
+        print(out)
+        return 0
+
     ce = CodeEvolve(
         repo=args.repo,
         clone_depth=args.depth,
@@ -443,6 +475,10 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.diff_out).write_text(report.diff.markdown, encoding="utf-8")
         if args.dashboard_out:
             write_dashboard(data, args.dashboard_out)
+        if args.viz_out:
+            from codeevolve.viz import write_viz
+
+            write_viz(report, args.viz_out)
         if report.repo_report and not args.out and not args.report_out:
             print(report.repo_report.markdown)
             print("\n---\n")

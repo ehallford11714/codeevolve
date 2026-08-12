@@ -130,11 +130,12 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 - [Ecology](docs/ECOLOGY.md) — event/changepoint stage calibration
 - [Evaluation](docs/EVAL.md) — synthetic / taxonomy / ecology / dynamics / public / agent
 - [Agent](docs/AGENT.md) — objective coding loop (sense → deliberate → act → verify)
+- [Phylogeny viz](docs/VIZ.md) — 3D builder (intent + analysis), clade tree, Fitch parsimony, gene-flow
 - [Metrics](docs/METRICS.md)
 - [Hierarchy](docs/HIERARCHY.md) · [RAG](docs/RAG.md) · [Semantic](docs/SEMANTIC.md)
 - [Cloud / HF Qwen](docs/CLOUD.md)
 
-**0.21** — PR review pack, frame-seeded steps, session delta memory, AST/CST symbol fence, blast-radius preview, coverage-gated tests, agent eval scored on objective delta (included in `evaluate --suite all`). **0.20** — patch engine, worktree, tool-calling, budgets/HITL. **0.19** — cognitive stack. **0.18** — objective agent + multi-provider LLMs.
+**0.22** — 3D phylogeny builder with commit intent and analysis inspector, plus 2D clade / Fitch parsimony / gene-flow gallery (SVG/HTML/Newick, `viz_phylogeny` MCP). **0.21** — PR review pack, frame-seeded steps, session delta memory, AST/CST symbol fence, blast-radius preview, coverage-gated tests, agent eval scored on objective delta (included in `evaluate --suite all`). **0.20** — patch engine, worktree, tool-calling, budgets/HITL. **0.19** — cognitive stack. **0.18** — objective agent + multi-provider LLMs.
 
 ```powershell
 python -m codeevolve --repo . provenance --pack --frame frame:basin
@@ -145,8 +146,11 @@ python -m codeevolve --repo . analyze --previous report.prev.json --out report.j
 ```
 
 ```powershell
-# Diff + dashboard + PR comment + CI gate
-python -m codeevolve --repo owner/repo analyze --out report.json --previous report.prev.json --dashboard-out dash.html
+# Diff + dashboard + phylogeny viz + PR comment + CI gate
+python -m codeevolve --repo owner/repo analyze --out report.json --previous report.prev.json --dashboard-out dash.html --viz-out viz.html
+python -m codeevolve viz --report report.json --out viz.html
+python -m codeevolve viz --report report.json --out builder.html --kind 3d
+python -m codeevolve viz --report report.json --out vizdir/
 python -m codeevolve --repo . coupling
 python -m codeevolve --repo . clones
 python -m codeevolve --repo . dependencies
