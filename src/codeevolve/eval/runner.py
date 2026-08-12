@@ -1,4 +1,4 @@
-"""Top-level evaluation runner: synthetic + taxonomy gold + public scorecard."""
+"""Top-level evaluation runner: synthetic + taxonomy + ecology + dynamics + public + agent."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from codeevolve.eval.benchmarks import BenchmarkCase, run_benchmark_suite
 
-Suite = Literal["synthetic", "public", "taxonomy", "ecology", "dynamics", "all"]
+Suite = Literal["synthetic", "public", "taxonomy", "ecology", "dynamics", "agent", "all"]
 
 
 @dataclass
@@ -24,6 +24,7 @@ class EvaluationReport:
     taxonomy_score: float | None = None
     ecology_score: float | None = None
     dynamics_score: float | None = None
+    agent_score: float | None = None
     public_skipped: list[dict[str, Any]] = field(default_factory=list)
     dynamics_skipped: list[dict[str, Any]] = field(default_factory=list)
     suite: str = "synthetic"
@@ -37,6 +38,7 @@ class EvaluationReport:
             "ecology_score": self.ecology_score,
             "dynamics_score": self.dynamics_score,
             "public_score": self.public_score,
+            "agent_score": self.agent_score,
             "passed_cases": self.passed_cases,
             "total_cases": self.total_cases,
             "summary": self.summary,
@@ -77,6 +79,7 @@ def _combine(
     ecology: float | None,
     dynamics: float | None,
     public: float | None,
+    agent: float | None = None,
 ) -> float:
     """Weight present suites (taxonomy/ecology/dynamics emphasized for credibility)."""
     parts: list[tuple[float, float]] = []
@@ -90,6 +93,8 @@ def _combine(
         parts.append((0.20, public))
     if synth is not None:
         parts.append((0.10, synth))
+    if agent is not None:
+        parts.append((0.10, agent))
     if not parts:
         return 0.0
     wsum = sum(w for w, _ in parts)
@@ -117,7 +122,7 @@ def run_evaluation(
     if suite in {"taxonomy", "all"}:
         from codeevolve.eval.taxonomy_gold import run_taxonomy_eval
 
-        tax_cases = run_taxonomy_eval(work)
+        tax_cases = run_taxonomy_eval(work / "taxonomy")
         tax_score = sum(c.score for c in tax_cases) / max(1, len(tax_cases))
 
     eco_cases: list[BenchmarkCase] = []
@@ -125,7 +130,7 @@ def run_evaluation(
     if suite in {"ecology", "all"}:
         from codeevolve.eval.ecology_gold import run_ecology_eval
 
-        eco_cases = run_ecology_eval(work)
+        eco_cases = run_ecology_eval(work / "ecology")
         eco_score = sum(c.score for c in eco_cases) / max(1, len(eco_cases))
 
     dyn_cases: list[BenchmarkCase] = []
@@ -154,6 +159,27 @@ def run_evaluation(
         public_score = sc.overall_score if sc.cases else None
         public_md = sc.markdown
 
+    agent_cases: list[BenchmarkCase] = []
+    agent_score = None
+    agent_md = ""
+    if suite in {"agent", "all"}:
+        from codeevolve.eval.agent_eval import benchmark_cases_from_agent_report, run_agent_eval
+
+        agent_report = run_agent_eval(work / "agent")
+        agent_cases = benchmark_cases_from_agent_report(agent_report)
+        raw_agent = agent_report.get("overall_score")
+        agent_score = float(raw_agent) if raw_agent is not None else None
+        counts = agent_report.get("outcome_counts") or {}
+        count_bits = ", ".join(f"{k}={v}" for k, v in sorted(counts.items())) or "none"
+        agent_md = _md_cases(
+            "Agent objective outcomes",
+            "Apply cases score objective delta (improved) or clean rollback — not artifact presence. "
+            "Dry-run cases score delta-readiness (baseline + measurable proposal). "
+            f"Outcomes: {count_bits}.",
+            agent_cases,
+            float(agent_score or 0.0),
+        )
+
     if suite == "synthetic":
         cases = synth_cases
         overall = float(synth_score or 0.0)
@@ -169,9 +195,12 @@ def run_evaluation(
     elif suite == "public":
         cases = public_cases
         overall = float(public_score or 0.0)
+    elif suite == "agent":
+        cases = agent_cases
+        overall = float(agent_score or 0.0)
     else:
-        cases = [*synth_cases, *tax_cases, *eco_cases, *dyn_cases, *public_cases]
-        overall = _combine(synth_score, tax_score, eco_score, dyn_score, public_score)
+        cases = [*synth_cases, *tax_cases, *eco_cases, *dyn_cases, *public_cases, *agent_cases]
+        overall = _combine(synth_score, tax_score, eco_score, dyn_score, public_score, agent_score)
 
     passed = sum(1 for c in cases if c.failed == 0)
     parts = [
@@ -229,6 +258,9 @@ def run_evaluation(
     if public_md:
         parts.append(public_md)
         parts.append("")
+    if agent_md:
+        parts.append(agent_md)
+        parts.append("")
     parts.extend(
         [
             "## Combined interpretation",
@@ -240,6 +272,7 @@ def run_evaluation(
             f"({len(dyn_skipped)} skipped)",
             f"- Public scorecard: {public_score if public_score is not None else 'n/a'} "
             f"({len(public_skipped)} skipped)",
+            f"- Agent outcomes (delta / rollback): {agent_score if agent_score is not None else 'n/a'}",
             f"- Combined overall: {overall:.1%}",
             "",
             "- Synthetic fixtures prove detectors fire on planted patterns.",
@@ -247,6 +280,7 @@ def run_evaluation(
             "- Ecology suite proves changepoints/events recalibrate stages (hypotheses).",
             "- Dynamics suite uses real GitHub tags only (trajectory / impulse / basin).",
             "- Public scorecard proves the tool runs on real tags with calibrated deltas.",
+            "- Agent suite scores objective improved or clean rollback (apply) and delta-readiness (dry-run).",
             "- Skipped public/dynamics cases (offline / clone failure) do not count as failures.",
             "",
         ]
@@ -259,6 +293,7 @@ def run_evaluation(
         f"ecology={eco_score if eco_score is not None else 'n/a'}, "
         f"dynamics={dyn_score if dyn_score is not None else 'n/a'}, "
         f"public={public_score if public_score is not None else 'n/a'}, "
+        f"agent={agent_score if agent_score is not None else 'n/a'}, "
         f"skipped_public={len(public_skipped)}, skipped_dynamics={len(dyn_skipped)})"
     )
     return EvaluationReport(
@@ -273,6 +308,7 @@ def run_evaluation(
         ecology_score=round(eco_score, 4) if eco_score is not None else None,
         dynamics_score=round(dyn_score, 4) if dyn_score is not None else None,
         public_score=round(public_score, 4) if public_score is not None else None,
+        agent_score=round(agent_score, 4) if agent_score is not None else None,
         public_skipped=public_skipped,
         dynamics_skipped=dyn_skipped,
         suite=suite,

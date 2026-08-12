@@ -28,6 +28,7 @@ class SymbolNode:
     kind: str  # function|class
     path: str
     line: int
+    end_line: int | None = None  # precise when AST/tree-sitter available
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -35,6 +36,7 @@ class SymbolNode:
             "kind": self.kind,
             "path": self.path,
             "line": self.line,
+            "end_line": self.end_line,
         }
 
 
@@ -88,6 +90,57 @@ def _scan_text(path: str, text: str) -> list[SymbolNode]:
     return out
 
 
+def _scan_python_ast(path: str, text: str) -> list[SymbolNode] | None:
+    """Stdlib AST scopes with accurate end_lineno (preferred for Python fences)."""
+    import ast
+
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return None
+    out: list[SymbolNode] = []
+
+    class V(ast.NodeVisitor):
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
+            out.append(
+                SymbolNode(
+                    f"{path}::{node.name}",
+                    "function",
+                    path,
+                    int(node.lineno),
+                    end_line=int(getattr(node, "end_lineno", None) or node.lineno),
+                )
+            )
+            self.generic_visit(node)
+
+        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:  # noqa: N802
+            out.append(
+                SymbolNode(
+                    f"{path}::{node.name}",
+                    "function",
+                    path,
+                    int(node.lineno),
+                    end_line=int(getattr(node, "end_lineno", None) or node.lineno),
+                )
+            )
+            self.generic_visit(node)
+
+        def visit_ClassDef(self, node: ast.ClassDef) -> None:  # noqa: N802
+            out.append(
+                SymbolNode(
+                    f"{path}::{node.name}",
+                    "class",
+                    path,
+                    int(node.lineno),
+                    end_line=int(getattr(node, "end_lineno", None) or node.lineno),
+                )
+            )
+            self.generic_visit(node)
+
+    V().visit(tree)
+    return out
+
+
 def _scan_python_treesitter(path: str, text: str) -> list[SymbolNode] | None:
     try:
         from tree_sitter_languages import get_parser  # type: ignore
@@ -110,8 +163,73 @@ def _scan_python_treesitter(path: str, text: str) -> list[SymbolNode] | None:
             name = text[name_node.start_byte : name_node.end_byte]
             kind = "class" if node.type == "class_definition" else "function"
             line = node.start_point[0] + 1
-            out.append(SymbolNode(f"{path}::{name}", kind, path, line))
+            end_line = node.end_point[0] + 1
+            out.append(SymbolNode(f"{path}::{name}", kind, path, line, end_line=end_line))
     return out
+
+
+def _scan_js_ts_treesitter(path: str, text: str) -> list[SymbolNode] | None:
+    try:
+        from tree_sitter_languages import get_parser  # type: ignore
+    except Exception:
+        return None
+    ext = Path(path).suffix.lower()
+    lang = "tsx" if ext == ".tsx" else "typescript" if ext in {".ts", ".tsx"} else "javascript"
+    try:
+        parser = get_parser(lang)
+        tree = parser.parse(text.encode("utf-8"))
+    except Exception:
+        # fallback language id
+        try:
+            parser = get_parser("javascript")
+            tree = parser.parse(text.encode("utf-8"))
+        except Exception:
+            return None
+    interesting = {
+        "function_declaration",
+        "class_declaration",
+        "method_definition",
+        "generator_function_declaration",
+    }
+    out: list[SymbolNode] = []
+    stack = [tree.root_node]
+    while stack:
+        node = stack.pop()
+        stack.extend(node.children)
+        if node.type not in interesting:
+            continue
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            continue
+        name = text[name_node.start_byte : name_node.end_byte]
+        kind = "class" if "class" in node.type else "function"
+        out.append(
+            SymbolNode(
+                f"{path}::{name}",
+                kind,
+                path,
+                node.start_point[0] + 1,
+                end_line=node.end_point[0] + 1,
+            )
+        )
+    return out or None
+
+
+def scan_symbols(path: str, text: str) -> tuple[list[SymbolNode], str]:
+    """Best-effort symbols with spans: ast → tree-sitter → regex."""
+    ext = Path(path).suffix.lower()
+    if ext == ".py":
+        nodes = _scan_python_ast(path, text)
+        if nodes:
+            return nodes, "ast"
+        nodes = _scan_python_treesitter(path, text)
+        if nodes:
+            return nodes, "tree_sitter"
+    elif ext in {".js", ".jsx", ".ts", ".tsx"}:
+        nodes = _scan_js_ts_treesitter(path, text)
+        if nodes:
+            return nodes, "tree_sitter"
+    return _scan_text(path, text), "regex"
 
 
 def extract_symbols(
@@ -149,11 +267,9 @@ def extract_symbols(
             continue
         if len(text) > 1_500_000:
             continue
-        found: list[SymbolNode] = []
-        if ts_ok and rel.endswith(".py"):
-            found = _scan_python_treesitter(rel, text) or []
-        if not found:
-            found = _scan_text(rel, text)
+        found, eng = scan_symbols(rel, text)
+        if eng != "regex":
+            engine = eng if engine == "regex" else f"{eng}+regex"
         symbols.extend(found)
         by_path[rel] += len(found)
         for s in found:

@@ -3,10 +3,13 @@ name: codeevolve
 description: >-
   Analyzes git history with CodeEvolve to build evolutionary provenance —
   taxonomy/clades, ecology stages, dynamics trajectories, and deliberation
-  frames (claim→evidence→falsifier). Use when the user wants to parse a
-  codebase's evolution, understand why hotspots exist, compare reports over
-  time, prepare a path fence pack before edits, or connect MCP tools named
-  analyze_repo / provenance_*. Prefer evidence packs over inventing rationale.
+  frames (claim→evidence→falsifier). Also runs the native objective coding
+  agent (evolve_toward_objective / `codeevolve agent`) to propose or apply
+  bounded improvements scored by re-analysis. Use when the user wants to parse
+  a codebase's evolution, improve toward an objective, understand why hotspots
+  exist, compare reports over time, prepare a path fence pack before edits, or
+  connect MCP tools named analyze_repo / provenance_* / evolve_toward_objective.
+  Prefer evidence packs over inventing rationale.
 ---
 
 # CodeEvolve — evolutionary provenance for agents
@@ -36,7 +39,7 @@ pip install -e "path\to\codeevolve"
 pip install "git+https://github.com/ehallford11714/codeevolve.git"
 ```
 
-Reload MCP / restart Cursor after install. Tools: `analyze_repo`, `provenance_pack`, `provenance_expand_frame`, `provenance_path_pack`, `provenance_resolve`, `provenance_timeline`.
+Reload MCP / restart Cursor after install. Tools: `analyze_repo`, `provenance_*`, `evolve_toward_objective`, `spawn_kernel_subagents`, `agent_cognition_info`.
 
 ## Standard workflow
 
@@ -54,7 +57,16 @@ Reload MCP / restart Cursor after install. Tools: `analyze_repo`, `provenance_pa
 
 3. **Decide** only after checking `falsifier` and `measure`. If stance is `insufficient`, say so — do not hallucinate motive.
 
-4. **Temporal**: if a previous report exists, re-analyze with `--previous` and open `frame:delta:report`.
+4. **Improve toward an objective** (native cognitive agent):
+
+   - MCP: `evolve_toward_objective` with `repo` + `objective`, `apply=false` first
+   - Stack: in-memory notes, RAG semantic chunks, morphemes, reflection, tooling (`grep`/`web_search`/…), compaction, kernel subagents
+   - Spawn helpers: `spawn_kernel_subagents`, inspect via `agent_cognition_info`
+   - CLI: `python -m codeevolve --repo . agent --objective reduce_debt`
+   - Review `.codeevolve/agent/` (`cognition.json`, `subagents/`), then `--apply`
+   - Agent re-scores via CodeEvolve and rolls back non-improving rounds
+
+5. **Temporal**: if a previous report exists, re-analyze with `--previous` and open `frame:delta:report`.
 
 ## CLI fallbacks (no MCP)
 
@@ -76,6 +88,7 @@ python examples/demo_dynamics.py
 
 ## Docs in repo
 
+- `docs/AGENT.md` — objective coding agent
 - `docs/PROVENANCE.md` — ledger & frames
 - `docs/DYNAMICS.md` — state trajectory
 - `docs/DEMO_DYNAMICS.md` — real-tag demo

@@ -144,8 +144,8 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument(
         "--suite",
         default="all",
-        choices=["synthetic", "public", "taxonomy", "ecology", "dynamics", "all"],
-        help="synthetic | taxonomy | ecology | dynamics | public scorecard | all (default)",
+        choices=["synthetic", "public", "taxonomy", "ecology", "dynamics", "agent", "all"],
+        help="synthetic | taxonomy | ecology | dynamics | public | agent | all (default)",
     )
     ev.add_argument(
         "--offline",
@@ -158,6 +158,57 @@ def main(argv: list[str] | None = None) -> int:
         default=[],
         help="Limit public suite to case id (repeatable)",
     )
+
+    ag = sub.add_parser(
+        "agent",
+        help="Objective-driven coding agent (sense→deliberate→act→verify via CodeEvolve)",
+    )
+    ag.add_argument(
+        "--objective",
+        default="follow_refactor",
+        help="reduce_debt | raise_stability | reduce_risk | stabilize_path | follow_refactor | metric:PATH:min|max",
+    )
+    ag.add_argument("--path", default=None, help="Path fence / stabilize_path focus")
+    ag.add_argument("--wave", default=None, help="Prefer refactor wave")
+    ag.add_argument("--max-rounds", type=int, default=1)
+    ag.add_argument("--max-commits", type=int, default=200)
+    ag.add_argument("--apply", action="store_true", help="Write edits (default dry-run)")
+    ag.add_argument(
+        "--llm",
+        nargs="?",
+        const="auto",
+        default="auto",
+        help="Provider alias: auto|slm|hf-qwen|openai|anthropic|grok|kimi|kimik3|openrouter|custom|heuristic",
+    )
+    ag.add_argument(
+        "--provider",
+        default=None,
+        help="Same as --llm (wins if both set): openai|anthropic|grok|kimi|kimik3|slm|hf-qwen|…",
+    )
+    ag.add_argument("--model", default=None, help="Chat/local model id override")
+    ag.add_argument("--base-url", default=None, help="OpenAI-compatible API base URL")
+    ag.add_argument("--api-key", default=None, help="API key (else provider env vars)")
+    ag.add_argument("--list-providers", action="store_true", help="List model providers and exit")
+    ag.add_argument("--no-cognition", action="store_true", help="Disable memory/RAG/reflect/tools/subagents stack")
+    ag.add_argument("--no-spawn", action="store_true", help="Do not spawn kernel subagents")
+    ag.add_argument("--no-web", action="store_true", help="Disable web_search tool")
+    ag.add_argument("--allow-shell", action="store_true", help="Enable bounded shell tool")
+    ag.add_argument("--rag-backend", default="memory", help="memory|chromadb|pinecone|auto")
+    ag.add_argument("--max-subagents", type=int, default=3)
+    ag.add_argument("--verify-cmd", default=None)
+    ag.add_argument("--out", default=None, help="Write AgentRun JSON")
+    ag.add_argument("--no-worktree", action="store_true", help="Skip git worktree/branch session on apply")
+    ag.add_argument("--approve", action="store_true", help="HITL prompt before applying edits")
+    ag.add_argument("--auto-approve", action="store_true", help="Skip HITL even with --approve")
+    ag.add_argument("--max-wall-seconds", type=float, default=None)
+    ag.add_argument("--max-cost-usd", type=float, default=None)
+    ag.add_argument("--no-tests-on-apply", action="store_true", help="Skip auto-detected test run after apply")
+    ag.add_argument("--parallel-subagents", action="store_true", help="Spawn kernel subagents in parallel")
+    ag.add_argument("--no-resume", action="store_true", help="Do not resume from last session report")
+    ag.add_argument("--previous-report", default=None, help="Explicit previous report.json for delta analyze")
+    ag.add_argument("--no-frame-seed", action="store_true", help="Do not prefer frame:basin/delta steps")
+    ag.add_argument("--no-blast-widen", action="store_true", help="Do not auto-widen path fence from blast")
+    ag.add_argument("--no-pr-pack", action="store_true", help="Skip writing pr_pack.md/json")
 
     args = p.parse_args(argv)
 
@@ -198,6 +249,56 @@ def main(argv: list[str] | None = None) -> int:
         _print(payload)
         return 0
 
+    if args.cmd == "agent":
+        from codeevolve.agent import run_agent
+        from codeevolve.agent.objective import Objective
+        from codeevolve.models.endpoints import recommend_agent_endpoint
+
+        if args.list_providers:
+            _print(recommend_agent_endpoint(args.repo))
+            return 0
+
+        obj = Objective.parse(args.objective, path=args.path, wave=args.wave)
+        run = run_agent(
+            args.repo,
+            obj,
+            max_rounds=args.max_rounds,
+            apply=bool(args.apply),
+            llm=args.llm,
+            provider=args.provider,
+            model=args.model,
+            base_url=args.base_url,
+            api_key=args.api_key,
+            verify_cmd=args.verify_cmd,
+            max_commits=args.max_commits,
+            path=args.path,
+            wave=args.wave,
+            model_tier=args.model_tier,
+            cognition=not bool(args.no_cognition),
+            spawn_subagents=not bool(args.no_spawn),
+            allow_web=not bool(args.no_web),
+            allow_shell=bool(args.allow_shell),
+            rag_backend=args.rag_backend,
+            max_subagents=args.max_subagents,
+            use_worktree=not bool(args.no_worktree),
+            approve=bool(args.approve),
+            auto_approve=bool(args.auto_approve),
+            max_wall_seconds=args.max_wall_seconds,
+            max_cost_usd=args.max_cost_usd,
+            run_tests_on_apply=not bool(args.no_tests_on_apply),
+            parallel_subagents=bool(args.parallel_subagents),
+            resume=not bool(args.no_resume),
+            previous_report=args.previous_report,
+            prefer_frames=not bool(args.no_frame_seed),
+            auto_widen_blast=not bool(args.no_blast_widen),
+            write_pr_review=not bool(args.no_pr_pack),
+        )
+        payload = run.to_dict()
+        if args.out:
+            Path(args.out).write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+        _print(payload)
+        return 0 if run.status in {"ok", "target_reached", "exhausted", "budget_stop"} else 1
+
     if args.cmd == "evaluate":
         report = CodeEvolve.evaluate(
             args.work_dir,
@@ -222,6 +323,7 @@ def main(argv: list[str] | None = None) -> int:
                 "ecology_score": report.ecology_score,
                 "dynamics_score": report.dynamics_score,
                 "public_score": report.public_score,
+                "agent_score": report.agent_score,
                 "public_skipped": report.public_skipped,
                 "dynamics_skipped": report.dynamics_skipped,
                 "passed_cases": report.passed_cases,
@@ -237,7 +339,8 @@ def main(argv: list[str] | None = None) -> int:
         eco_ok = report.ecology_score is None or report.ecology_score >= 0.7
         dyn_ok = report.dynamics_score is None or report.dynamics_score >= 0.7
         public_ok = report.public_score is None or report.public_score >= 0.55
-        return 0 if (synth_ok and tax_ok and eco_ok and dyn_ok and public_ok and report.overall_score >= 0.55) else 1
+        agent_ok = report.agent_score is None or report.agent_score >= 0.55
+        return 0 if (synth_ok and tax_ok and eco_ok and dyn_ok and public_ok and agent_ok and report.overall_score >= 0.55) else 1
 
     if args.cmd == "tiers":
         _print({k: v.to_dict() for k, v in TIERS.items()})

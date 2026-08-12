@@ -1,0 +1,25 @@
+{
+  "provider": "auto",
+  "prefer_local": false,
+  "provider_order": ["openai", "anthropic", "grok", "kimik3", "kimi", "openrouter"],
+  "endpoints": {
+    "openai": {
+      "model": "gpt-4o-mini"
+    },
+    "anthropic": {
+      "model": "claude-sonnet-4-20250514"
+    },
+    "grok": {
+      "model": "grok-3-mini",
+      "base_url": "https://api.x.ai/v1"
+    },
+    "kimik3": {
+      "model": "kimi-k2-0905-preview",
+      "base_url": "https://api.moonshot.ai/v1"
+    },
+    "custom": {
+      "model": "my-model",
+      "base_url": "https://my-gateway.example/v1"
+    }
+  }
+}

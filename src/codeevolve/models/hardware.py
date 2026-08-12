@@ -128,29 +128,46 @@ def pick_qwen_model(profile: HardwareProfile | None = None) -> str:
 
 
 def recommend_execution(profile: HardwareProfile | None = None) -> dict[str, Any]:
-    """Recommend local HF Qwen vs cloud vs heuristic for report generation."""
+    """Recommend local HF Qwen / SLM vs cloud vs heuristic for report generation."""
     hw = profile or assess_hardware()
-    has_openai = bool(
-        os.environ.get("CODEEVOLVE_LLM_API_KEY")
-        or os.environ.get("OPENAI_API_KEY")
-        or os.environ.get("ANTHROPIC_API_KEY")
-    )
+    has_openai = bool(os.environ.get("CODEEVOLVE_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY"))
+    has_anthropic = bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("CODEEVOLVE_ANTHROPIC_API_KEY"))
+    has_grok = bool(os.environ.get("XAI_API_KEY") or os.environ.get("GROK_API_KEY") or os.environ.get("CODEEVOLVE_GROK_API_KEY"))
+    has_kimi = bool(os.environ.get("MOONSHOT_API_KEY") or os.environ.get("KIMI_API_KEY") or os.environ.get("CODEEVOLVE_KIMI_API_KEY"))
+    has_cloud = has_openai or has_anthropic or has_grok or has_kimi
     skip_hf = os.environ.get("CODEEVOLVE_SKIP_HF", "").lower() in {"1", "true", "yes"}
     local_ok = (not skip_hf) and hw.ram_gb >= 4.0 and (hw.disk_free_gb is None or hw.disk_free_gb >= 2.0)
+    strong_gpu = bool(hw.cuda_available and (hw.vram_gb or 0) >= 8.0)
 
-    if local_ok and (hw.cuda_available or hw.ram_gb >= 8.0):
+    if local_ok and strong_gpu:
         return {
             "run_local": True,
             "offload_cloud": False,
             "backend": "hf-qwen",
             "local_model": hw.recommended_model,
-            "reason": "Hardware sufficient for local Qwen",
+            "reason": "GPU VRAM sufficient for larger local Qwen",
         }
-    if has_openai:
+    if local_ok and (hw.cuda_available or hw.ram_gb >= 8.0):
+        return {
+            "run_local": True,
+            "offload_cloud": False,
+            "backend": "slm" if (hw.vram_gb or 0) < 8.0 else "hf-qwen",
+            "local_model": hw.recommended_model,
+            "reason": "Hardware sufficient for local SLM/Qwen",
+        }
+    if has_cloud:
+        if has_openai:
+            backend = "openai"
+        elif has_anthropic:
+            backend = "anthropic"
+        elif has_grok:
+            backend = "grok"
+        else:
+            backend = "kimi"
         return {
             "run_local": False,
             "offload_cloud": True,
-            "backend": "openai" if os.environ.get("OPENAI_API_KEY") or os.environ.get("CODEEVOLVE_LLM_API_KEY") else "anthropic",
+            "backend": backend,
             "local_model": hw.recommended_model,
             "reason": "Local HF constrained — using cloud API key",
         }

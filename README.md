@@ -15,6 +15,12 @@ GitHub URL | local path
 ## Install
 
 ```powershell
+pip install codeevolve
+```
+
+From source:
+
+```powershell
 git clone https://github.com/ehallford11714/codeevolve.git
 cd codeevolve
 python -m venv .venv
@@ -26,10 +32,14 @@ pip install -e ".[dev]"
 
 ## For agents (MCP)
 
-**Start here:** [AGENTS.md](AGENTS.md) · details: [docs/MCP.md](docs/MCP.md)
+**Start here:** [AGENTS.md](AGENTS.md) · details: [docs/MCP.md](docs/MCP.md) · objective agent: [docs/AGENT.md](docs/AGENT.md)
 
 ```powershell
-pip install -e .                    # or: pip install "git+https://github.com/ehallford11714/codeevolve.git"
+pip install codeevolve
+# or from source:
+pip install -e .
+# or from GitHub:
+pip install "git+https://github.com/ehallford11714/codeevolve.git"
 python -m codeevolve.mcp            # stdio MCP server (also: codeevolve-mcp)
 ```
 
@@ -38,8 +48,15 @@ python -m codeevolve.mcp            # stdio MCP server (also: codeevolve-mcp)
 | Cursor MCP config | [`.cursor/mcp.json`](.cursor/mcp.json) |
 | Agent skill | [`.cursor/skills/codeevolve/SKILL.md`](.cursor/skills/codeevolve/SKILL.md) |
 | Tool loop | `analyze_repo` → `provenance_pack` → `provenance_expand_frame` / `provenance_path_pack` |
+| Improve loop | `evolve_toward_objective` (or `python -m codeevolve agent --objective …`) |
 
 Agents should deliberate from frames (`claim → evidence → falsifier`), not invent history.
+
+```powershell
+# Native coding agent: propose improvements scored by CodeEvolve
+python -m codeevolve --repo . agent --objective reduce_debt --max-rounds 2
+python -m codeevolve --repo . agent --objective follow_refactor --apply --verify-cmd "pytest -q"
+```
 
 ## Quick start
 
@@ -111,12 +128,13 @@ $env:CODEEVOLVE_SKIP_HF = "1"                # force no local download
 - [Dynamics](docs/DYNAMICS.md) — state trajectory rationale (FEAST-aligned)
 - [Dynamics demo](docs/DEMO_DYNAMICS.md) — real-tag walkthrough (`examples/demo_dynamics.py`)
 - [Ecology](docs/ECOLOGY.md) — event/changepoint stage calibration
-- [Evaluation](docs/EVAL.md) — synthetic / taxonomy / ecology / dynamics / public
+- [Evaluation](docs/EVAL.md) — synthetic / taxonomy / ecology / dynamics / public / agent
+- [Agent](docs/AGENT.md) — objective coding loop (sense → deliberate → act → verify)
 - [Metrics](docs/METRICS.md)
 - [Hierarchy](docs/HIERARCHY.md) · [RAG](docs/RAG.md) · [Semantic](docs/SEMANTIC.md)
 - [Cloud / HF Qwen](docs/CLOUD.md)
 
-**0.17** — stdio MCP, Cursor `mcp.json` + skill, [AGENTS.md](AGENTS.md). **0.16** — micro-provenance + schemas + dynamics eval.
+**0.21** — PR review pack, frame-seeded steps, session delta memory, AST/CST symbol fence, blast-radius preview, coverage-gated tests, agent eval scored on objective delta (included in `evaluate --suite all`). **0.20** — patch engine, worktree, tool-calling, budgets/HITL. **0.19** — cognitive stack. **0.18** — objective agent + multi-provider LLMs.
 
 ```powershell
 python -m codeevolve --repo . provenance --pack --frame frame:basin

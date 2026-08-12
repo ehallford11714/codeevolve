@@ -47,6 +47,7 @@ CLI / CodeEvolve(repo|github-url)
 | `risk/` | Failure points + blast radius + coupling + dependencies |
 | `provenance/` | Dynamics + ledger + schema/MCP dispatch |
 | `mcp/` | Stdio MCP server (Content-Length JSON-RPC) + JSONL legacy mode |
+| `agent/` | Cognitive coding agent (memory, RAG, morphemes, reflect/act/compact, kernel subagents, tools) |
 | `eval/` | Synthetic, taxonomy gold, ecology, **dynamics**, public scorecard |
 | `refactor/` | Phased plan + effort heuristics |
 | `models/` | Tiers (slm→frontier), SLM taxonomy guide, HF/cloud |
@@ -75,7 +76,8 @@ Stages are computed **globally** and **per clade**, then optionally **recalibrat
 | `report.provenance` | Full ledger + frames |
 | `provenance` CLI | pack / path-pack / frame / resolve / timeline / schema |
 | `schemas/` | Deliberation pack JSON Schema + MCP tool list |
-| `python -m codeevolve.mcp` | MCP stdio (`analyze_repo` + provenance_*) |
+| `python -m codeevolve.mcp` | MCP stdio (`analyze_repo` + provenance_* + `evolve_toward_objective`) |
+| `python -m codeevolve.agent` | Objective improve loop (dry-run or `--apply`) |
 
 Rationale and kinds: [PROVENANCE.md](PROVENANCE.md).
 

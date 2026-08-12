@@ -1,3 +1,11 @@
+from codeevolve.models.backends import chat_complete, get_chat_backend, get_narrative_backend
+from codeevolve.models.endpoints import (
+    EndpointConfig,
+    list_providers,
+    load_models_config,
+    recommend_agent_endpoint,
+    resolve_endpoint,
+)
 from codeevolve.models.hardware import HardwareProfile, assess_hardware, pick_qwen_model, recommend_execution
 from codeevolve.models.hf_qwen import ensure_hf_qwen
 from codeevolve.models.router import resolve_backend_name
@@ -26,4 +34,12 @@ __all__ = [
     "resolve_tier",
     "tier_spec",
     "apply_tier_env",
+    "EndpointConfig",
+    "list_providers",
+    "load_models_config",
+    "recommend_agent_endpoint",
+    "resolve_endpoint",
+    "get_chat_backend",
+    "get_narrative_backend",
+    "chat_complete",
 ]

@@ -39,9 +39,9 @@ This repo ships [`.cursor/mcp.json`](../.cursor/mcp.json):
 1. Open the repo in Cursor (or merge the `mcpServers.codeevolve` block into your user MCP config).
 2. Ensure `python -m codeevolve.mcp --help` works in that environment.
 3. Reload MCP / restart Cursor.
-4. Confirm tools: `analyze_repo`, `provenance_pack`, `provenance_expand_frame`, `provenance_path_pack`, `provenance_resolve`, `provenance_timeline`.
+4. Confirm tools: `analyze_repo`, `provenance_pack`, `provenance_expand_frame`, `provenance_path_pack`, `provenance_resolve`, `provenance_timeline`, `evolve_toward_objective`.
 
-Agent skill (project): [`.cursor/skills/codeevolve/SKILL.md`](../.cursor/skills/codeevolve/SKILL.md).
+Agent skill (project): [`.cursor/skills/codeevolve/SKILL.md`](../.cursor/skills/codeevolve/SKILL.md). Objective agent: [AGENT.md](AGENT.md).
 
 ## Tool loop
 
@@ -52,6 +52,7 @@ Agent skill (project): [`.cursor/skills/codeevolve/SKILL.md`](../.cursor/skills/
 | 3 | `provenance_expand_frame` | Drill into `frame:basin`, `frame:risk:*`, … |
 | 4 | `provenance_path_pack` | Before editing a hotspot path |
 | 5 | `provenance_resolve` / `provenance_timeline` | Walk evidence / chronology |
+| 6 | `evolve_toward_objective` | Dry-run or apply bounded improvements scored by re-analysis |
 
 `analyze_repo` arguments:
 

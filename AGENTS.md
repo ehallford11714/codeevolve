@@ -7,17 +7,19 @@ Full MCP detail: [docs/MCP.md](docs/MCP.md) · Human overview: [README.md](READM
 ## 1. Install
 
 ```powershell
+pip install codeevolve
+# verify
+python -m codeevolve.mcp --help
+```
+
+From source:
+
+```powershell
 git clone https://github.com/ehallford11714/codeevolve.git
 cd codeevolve
 pip install -e .
 # verify
 python -m codeevolve.mcp --help
-```
-
-Or without cloning:
-
-```powershell
-pip install "git+https://github.com/ehallford11714/codeevolve.git"
 ```
 
 The MCP host must use the **same Python** where `codeevolve` is installed.
@@ -54,8 +56,29 @@ PYTHONUTF8=1
 | Frame | `provenance_expand_frame` | `from_report`, `frame` (e.g. `frame:basin`) |
 | Path fence | `provenance_path_pack` | `from_report`, `path` before editing a hotspot |
 | Walk | `provenance_resolve` / `provenance_timeline` | evidence chain / chronology |
+| Improve | `evolve_toward_objective` | `repo`, `objective`, optional `path`, `max_rounds`, `apply`, cognition/spawn flags |
+| Kernels | `spawn_kernel_subagents` | Spawn stabilize/contain/pay_down/investigate/search/… subagents |
+| Cognition | `agent_cognition_info` | Memory/RAG/morpheme/tools/kernel catalog |
 
 Default report path if `out` omitted: `.codeevolve/report.json`.
+
+### Objective improve loop (native agent)
+
+When the goal is to **change code toward a measurable objective**, use the built-in agent (not inventing history):
+
+1. Dry-run: `evolve_toward_objective` with `apply=false` (default)
+2. Review `rounds[].proposal` (`frame_ids`, `falsifier`, `edit_previews`)
+3. Apply: same tool with `apply=true` (+ `verify_cmd` if tests exist)
+4. Agent re-analyzes with previous report and **rolls back** rounds that worsen signals
+
+Objectives: `follow_refactor` · `reduce_debt` · `raise_stability` · `reduce_risk` · `stabilize_path` · `metric:debt.score:min`
+
+**Models (default `auto`):** local SLM / GPU-sized HF Qwen, or cloud `openai` · `anthropic` · `grok` · `kimik3`/`kimi` · `openrouter` · `custom` (`--base-url`). Configure via `--provider`/`--model`/`--api-key`, env keys, or `.codeevolve/models.json` (see [docs/CLOUD.md](docs/CLOUD.md), [docs/AGENT.md](docs/AGENT.md)).
+
+```powershell
+python -m codeevolve agent --list-providers
+python -m codeevolve --repo . agent --provider grok --model grok-3-mini
+```
 
 ## 4. CLI fallback (no MCP)
 
@@ -64,6 +87,8 @@ python -m codeevolve --repo <path|owner/repo> analyze --out .codeevolve/report.j
 python -m codeevolve provenance --from-report .codeevolve/report.json --pack
 python -m codeevolve provenance --from-report .codeevolve/report.json --path-pack src/api.py
 python -m codeevolve provenance --from-report .codeevolve/report.json --frame frame:basin
+python -m codeevolve --repo <path|owner/repo> agent --objective reduce_debt --max-rounds 2
+python -m codeevolve.agent --repo . --objective follow_refactor --apply --verify-cmd "pytest -q"
 ```
 
 ## 5. Rules
@@ -72,6 +97,7 @@ python -m codeevolve provenance --from-report .codeevolve/report.json --frame fr
 - Cite `frame:*` ids and evidence record ids in answers
 - Respect `falsifier` and `measure`; do not claim chaos/Lyapunov or line-level archaeology
 - Re-analyze with a previous report when temporal deltas matter (`frame:delta:report`)
+- For code changes: prefer `evolve_toward_objective` dry-run before `apply=true`
 
 ## 6. Schemas
 

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codeevolve"
-version = "0.17.0"
-description = "Code evolution analysis with dynamical provenance, MCP stdio server + agent skill, micro-provenance, deliberation schemas, and multi-suite eval."
+version = "0.21.0"
+description = "Code evolution analysis with dynamical provenance, cognitive coding agent (memory/RAG/morphemes/subagents), MCP stdio server + agent skill, micro-provenance, deliberation schemas, and multi-suite eval."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"

@@ -439,12 +439,12 @@ class CodeEvolve:
         offline: bool = False,
         public_case_ids: list[str] | None = None,
     ):
-        """Run evaluation suite (synthetic + taxonomy gold/RAG + public scorecard)."""
+        """Run evaluation suite (synthetic + taxonomy + ecology + dynamics + public + agent)."""
         from codeevolve.eval.runner import Suite, run_evaluation
 
         s: Suite = (  # type: ignore[assignment]
             suite
-            if suite in {"synthetic", "public", "taxonomy", "ecology", "dynamics", "all"}
+            if suite in {"synthetic", "public", "taxonomy", "ecology", "dynamics", "agent", "all"}
             else "all"
         )
         return run_evaluation(

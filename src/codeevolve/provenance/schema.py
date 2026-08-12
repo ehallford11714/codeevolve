@@ -184,6 +184,168 @@ MCP_TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "name": "evolve_toward_objective",
+        "description": (
+            "Run the native CodeEvolve coding agent: analyze → provenance frames → "
+            "bounded proposal/edits → re-score against an objective. "
+            "Default is dry-run (proposals only); set apply=true to write files."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["repo"],
+            "properties": {
+                "repo": {
+                    "type": "string",
+                    "description": "Local path, owner/name, or GitHub URL",
+                },
+                "objective": {
+                    "type": "string",
+                    "default": "follow_refactor",
+                    "description": (
+                        "reduce_debt | raise_stability | reduce_risk | stabilize_path | "
+                        "follow_refactor | pass_tests | metric:debt.score:min"
+                    ),
+                },
+                "path": {"type": "string", "description": "Optional path fence"},
+                "wave": {
+                    "type": "string",
+                    "description": "Prefer refactor wave: stabilize|contain|pay_down|evolve",
+                },
+                "max_rounds": {"type": "integer", "default": 1},
+                "max_commits": {"type": "integer", "default": 200},
+                "apply": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "If true, write edits and keep only improving rounds",
+                },
+                "llm": {
+                    "type": "string",
+                    "default": "auto",
+                    "description": (
+                        "Provider: auto|slm|hf-qwen|openai|anthropic|grok|kimi|kimik3|"
+                        "openrouter|custom|heuristic"
+                    ),
+                },
+                "provider": {
+                    "type": "string",
+                    "description": "Alias for llm; wins when both set",
+                },
+                "model": {
+                    "type": "string",
+                    "description": "Model id override (gpt-4o, claude-sonnet-*, grok-3, kimi-k2, Qwen/…)",
+                },
+                "base_url": {
+                    "type": "string",
+                    "description": "OpenAI-compatible API base URL for custom/grok/kimi/etc.",
+                },
+                "api_key": {
+                    "type": "string",
+                    "description": "API key override (else provider env vars)",
+                },
+                "model_tier": {
+                    "type": "string",
+                    "default": "slm",
+                    "description": "Local ladder tier: slm|standard|large|frontier",
+                },
+                "verify_cmd": {
+                    "type": "string",
+                    "description": "Shell command that must pass after apply",
+                },
+                "out": {
+                    "type": "string",
+                    "description": "Optional path to write AgentRun JSON",
+                },
+                "cognition": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Enable memory/RAG/morpheme/reflect/tools/compact stack",
+                },
+                "spawn_subagents": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Spawn kernel-objective subagents when reflection requests it",
+                },
+                "allow_web": {"type": "boolean", "default": True},
+                "allow_shell": {"type": "boolean", "default": False},
+                "rag_backend": {
+                    "type": "string",
+                    "default": "memory",
+                    "description": "RAG vector backend: memory|chromadb|pinecone|auto",
+                },
+                "max_subagents": {"type": "integer", "default": 3},
+                "use_worktree": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Use git branch/worktree session when applying",
+                },
+                "approve": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "HITL approval before apply",
+                },
+                "auto_approve": {"type": "boolean", "default": False},
+                "max_wall_seconds": {"type": "number"},
+                "max_cost_usd": {"type": "number"},
+                "run_tests_on_apply": {"type": "boolean", "default": True},
+                "parallel_subagents": {"type": "boolean", "default": False},
+                "resume": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Resume delta analyze from last session report",
+                },
+                "previous_report": {
+                    "type": "string",
+                    "description": "Explicit previous report.json for frame:delta:report",
+                },
+                "prefer_frames": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Seed steps from frame:basin / frame:delta",
+                },
+                "auto_widen_blast": {"type": "boolean", "default": True},
+                "refuse_huge_blast": {"type": "boolean", "default": True},
+                "write_pr_review": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Write deliberation-backed pr_pack.md/json",
+                },
+            },
+        },
+    },
+    {
+        "name": "spawn_kernel_subagents",
+        "description": (
+            "Spawn CodeEvolve kernel subagents (stabilize/contain/pay_down/investigate/search/…) "
+            "with shared in-memory RAG + tooling. Returns findings without applying edits."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["repo"],
+            "properties": {
+                "repo": {"type": "string"},
+                "objective": {"type": "string", "default": "follow_refactor"},
+                "kernels": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Kernel names; default = decompose objective",
+                },
+                "path": {"type": "string"},
+                "max_agents": {"type": "integer", "default": 3},
+                "allow_web": {"type": "boolean", "default": True},
+                "parallel": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Run kernel subagents in parallel with path locks",
+                },
+            },
+        },
+    },
+    {
+        "name": "agent_cognition_info",
+        "description": "Describe the CodeEvolve agent cognitive stack, tools, and kernel catalog.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -340,12 +502,108 @@ def _run_analyze(arguments: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _run_evolve_toward_objective(arguments: dict[str, Any]) -> dict[str, Any]:
+    from codeevolve.agent import run_agent
+    from codeevolve.agent.objective import Objective
+
+    repo = str(arguments.get("repo") or "")
+    if not repo:
+        return {"error": "repo required"}
+    obj = Objective.parse(
+        str(arguments.get("objective") or "follow_refactor"),
+        path=arguments.get("path"),
+        wave=arguments.get("wave"),
+    )
+    run = run_agent(
+        repo,
+        obj,
+        max_rounds=int(arguments.get("max_rounds") or 1),
+        apply=bool(arguments.get("apply", False)),
+        llm=arguments.get("llm") or "auto",
+        provider=arguments.get("provider"),
+        model=arguments.get("model"),
+        base_url=arguments.get("base_url"),
+        api_key=arguments.get("api_key"),
+        verify_cmd=arguments.get("verify_cmd"),
+        max_commits=int(arguments.get("max_commits") or 200),
+        path=arguments.get("path"),
+        wave=arguments.get("wave"),
+        model_tier=str(arguments.get("model_tier") or "slm"),
+        cognition=bool(arguments.get("cognition", True)),
+        spawn_subagents=bool(arguments.get("spawn_subagents", True)),
+        allow_web=bool(arguments.get("allow_web", True)),
+        allow_shell=bool(arguments.get("allow_shell", False)),
+        rag_backend=str(arguments.get("rag_backend") or "memory"),
+        max_subagents=int(arguments.get("max_subagents") or 3),
+        use_worktree=bool(arguments.get("use_worktree", True)),
+        approve=bool(arguments.get("approve", False)),
+        auto_approve=bool(arguments.get("auto_approve", False)),
+        max_wall_seconds=arguments.get("max_wall_seconds"),
+        max_cost_usd=arguments.get("max_cost_usd"),
+        run_tests_on_apply=bool(arguments.get("run_tests_on_apply", True)),
+        parallel_subagents=bool(arguments.get("parallel_subagents", False)),
+        resume=bool(arguments.get("resume", True)),
+        previous_report=arguments.get("previous_report"),
+        prefer_frames=bool(arguments.get("prefer_frames", True)),
+        auto_widen_blast=bool(arguments.get("auto_widen_blast", True)),
+        refuse_huge_blast=bool(arguments.get("refuse_huge_blast", True)),
+        write_pr_review=bool(arguments.get("write_pr_review", True)),
+    )
+    payload = run.to_dict()
+    out = arguments.get("out")
+    if out:
+        Path(out).write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+        payload["out"] = str(Path(out).resolve())
+    payload["howto"] = (
+        "Inspect rounds[].proposal (frame_ids, falsifier, edit_previews). "
+        "Re-run with apply=true only after reviewing dry-run proposals. "
+        "Prefer provenance_path_pack before large manual edits."
+    )
+    return payload
+
+
 def dispatch_mcp_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """Execute an MCP-shaped tool against a report path, live analyze, or inline report."""
     from codeevolve.provenance.ledger import build_provenance_ledger, query_provenance
 
     if name == "analyze_repo":
         return _run_analyze(arguments)
+    if name == "evolve_toward_objective":
+        return _run_evolve_toward_objective(arguments)
+    if name == "agent_cognition_info":
+        from codeevolve.agent.cognition import describe_cognition
+
+        return describe_cognition()
+    if name == "spawn_kernel_subagents":
+        from codeevolve.agent.kernel import decompose_objective
+        from codeevolve.agent.objective import Objective
+        from codeevolve.agent.subagents import spawn_subagents
+
+        repo = str(arguments.get("repo") or "")
+        if not repo:
+            return {"error": "repo required"}
+        obj = Objective.parse(
+            str(arguments.get("objective") or "follow_refactor"),
+            path=arguments.get("path"),
+        )
+        kernels = arguments.get("kernels")
+        if not kernels:
+            kernels = [k.name for k in decompose_objective(obj, max_kernels=int(arguments.get("max_agents") or 3))]
+        results = spawn_subagents(
+            repo,
+            obj,
+            list(kernels),
+            max_agents=int(arguments.get("max_agents") or 3),
+            allow_web=bool(arguments.get("allow_web", True)),
+            llm="heuristic",
+            parallel=bool(arguments.get("parallel", False)),
+        )
+        return {
+            "repo": repo,
+            "objective": obj.to_dict(),
+            "subagents": [r.to_dict() for r in results],
+            "count": len(results),
+        }
 
     report = arguments.get("report")
     if report is None:

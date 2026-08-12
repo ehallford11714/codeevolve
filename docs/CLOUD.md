@@ -45,6 +45,28 @@ python -m codeevolve --repo . analyze --llm anthropic
 python -m codeevolve --repo . analyze --llm heuristic
 ```
 
+## Coding agent providers
+
+The objective agent (`codeevolve agent`) resolves a chat endpoint via **auto** (default):
+
+1. Strong GPU (≥8GB VRAM) → local `hf-qwen` ladder model  
+2. Modest GPU / enough RAM → local `slm`  
+3. Else first configured cloud: OpenAI → Anthropic → Grok → Kimi/K3 → OpenRouter  
+4. Else heuristic scaffolds only  
+
+```powershell
+python -m codeevolve agent --list-providers
+python -m codeevolve --repo . agent --provider openai --model gpt-4o
+python -m codeevolve --repo . agent --provider anthropic --model claude-sonnet-4-20250514
+python -m codeevolve --repo . agent --provider grok --model grok-3-mini
+python -m codeevolve --repo . agent --provider kimik3 --model kimi-k2-0905-preview
+python -m codeevolve --repo . agent --provider custom --base-url https://host/v1 --model my-model --api-key $env:KEY
+python -m codeevolve --repo . agent --llm slm --model-tier standard
+python -m codeevolve --repo . agent --llm hf-qwen   # GPU-sized Qwen
+```
+
+Copy [examples/models.json](../examples/models.json) to `.codeevolve/models.json` (repo or `~/.codeevolve/`) to set defaults without CLI flags.
+
 ## Environment variables
 
 | Variable | Purpose |
@@ -55,6 +77,12 @@ python -m codeevolve --repo . analyze --llm heuristic
 | `CODEEVOLVE_LLM_API_KEY` / `OPENAI_API_KEY` | OpenAI-compatible |
 | `CODEEVOLVE_LLM_BASE_URL` | OpenAI-compatible base URL |
 | `ANTHROPIC_API_KEY` | Anthropic |
+| `XAI_API_KEY` / `GROK_API_KEY` | xAI Grok |
+| `MOONSHOT_API_KEY` / `KIMI_API_KEY` | Moonshot Kimi / Kimi K3 |
+| `OPENROUTER_API_KEY` | OpenRouter |
+| `CODEEVOLVE_AGENT_PROVIDER` | Default agent provider (`auto`, `grok`, …) |
+| `CODEEVOLVE_AGENT_PREFER_LOCAL` | `1` → prefer SLM/HF even when cloud keys exist |
+| `CODEEVOLVE_GROK_MODEL` / `CODEEVOLVE_KIMI_MODEL` / `CODEEVOLVE_KIMIK3_MODEL` | Provider model overrides |
 | `CODEEVOLVE_SKIP_HF` | `1` → skip local HF (use cloud or slm_heuristic) |
 | `CODEEVOLVE_TAXONOMY_HEURISTIC` | `1` → force deterministic taxonomy guide |
 | `CODEEVOLVE_HF_DOWNLOAD` | `1` → allow tokenizer prefetch |

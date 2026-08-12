@@ -1,4 +1,4 @@
-"""Select report backend: auto | heuristic | hf-qwen | openai | anthropic."""
+"""Select report/agent backend: auto | heuristic | slm | hf-qwen | openai | anthropic | grok | kimi | …"""
 
 from __future__ import annotations
 
@@ -7,12 +7,24 @@ from typing import Literal
 
 from codeevolve.models.hardware import recommend_execution
 
-BackendName = Literal["heuristic", "hf-qwen", "openai", "anthropic", "openai_compatible"]
+BackendName = Literal[
+    "heuristic",
+    "slm",
+    "hf-qwen",
+    "openai",
+    "anthropic",
+    "openai_compatible",
+    "grok",
+    "kimi",
+    "kimik3",
+    "openrouter",
+    "custom",
+]
 
 
 def resolve_backend_name(llm: str | bool | None = None) -> BackendName:
     """
-    ``llm`` may be False/None (heuristic), True/'auto', or an explicit backend name.
+    ``llm`` may be False/None (heuristic), True/'auto', or an explicit backend/provider name.
     """
     if llm is None or llm is False or llm == "" or llm == "heuristic":
         env = os.environ.get("CODEEVOLVE_LLM_BACKEND", "").lower().strip()
@@ -27,17 +39,40 @@ def resolve_backend_name(llm: str | bool | None = None) -> BackendName:
         b = str(rec.get("backend") or "heuristic")
         if b == "openai":
             return "openai_compatible"
-        if b in {"hf-qwen", "anthropic", "heuristic"}:
+        if b in {"hf-qwen", "anthropic", "heuristic", "slm", "grok", "kimi"}:
             return b  # type: ignore[return-value]
         return "heuristic"
 
     name = str(llm).lower().strip()
-    if name in {"openai", "openai_compatible", "cloud"}:
+    aliases = {
+        "gpt": "openai",
+        "claude": "anthropic",
+        "xai": "grok",
+        "moonshot": "kimi",
+        "kimi-k3": "kimik3",
+        "kimi_k3": "kimik3",
+        "qwen": "hf-qwen",
+        "huggingface": "hf-qwen",
+        "hf": "hf-qwen",
+        "local": "slm",
+        "cloud": "openai_compatible",
+    }
+    name = aliases.get(name, name)
+    if name in {"openai", "cloud"}:
         return "openai_compatible"
-    if name in {"hf-qwen", "qwen", "huggingface"}:
-        return "hf-qwen"
-    if name == "anthropic":
-        return "anthropic"
+    if name in {
+        "openai_compatible",
+        "hf-qwen",
+        "anthropic",
+        "heuristic",
+        "slm",
+        "grok",
+        "kimi",
+        "kimik3",
+        "openrouter",
+        "custom",
+    }:
+        return name  # type: ignore[return-value]
     if name == "auto":
         return resolve_backend_name("auto")
     return "heuristic"

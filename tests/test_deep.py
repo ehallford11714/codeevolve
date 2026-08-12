@@ -49,7 +49,7 @@ def test_hardware_and_router() -> None:
     hw = assess_hardware(prefer_small=True)
     assert "Qwen" in hw.recommended_model
     rec = recommend_execution(hw)
-    assert rec["backend"] in {"hf-qwen", "openai", "anthropic", "heuristic"}
+    assert rec["backend"] in {"slm", "hf-qwen", "openai", "anthropic", "heuristic"}
     assert resolve_backend_name(False) == "heuristic"
     assert resolve_backend_name("openai") == "openai_compatible"
 

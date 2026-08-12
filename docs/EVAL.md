@@ -11,6 +11,7 @@ CodeEvolve treats evolutionary “laws” and ecological stages as **hypotheses*
 5. **Ecology calibration** — PELT changepoints + lifecycle events (see [ECOLOGY.md](ECOLOGY.md))  
 6. **Dynamics + provenance** — trajectory, impulses/basins, micro kinds, pack schema (see [DYNAMICS.md](DYNAMICS.md), [PROVENANCE.md](PROVENANCE.md))  
 7. **Public-repo scorecard** — real GitHub tags; smoke + before/after directional checks  
+8. **Agent outcomes** — apply rounds score **objective improved** or **clean rollback**; dry-run scores delta-readiness (baseline + measurable proposal)
 
 ### Why each layer
 
@@ -22,6 +23,7 @@ CodeEvolve treats evolutionary “laws” and ecological stages as **hypotheses*
 | Ecology | Stages must move with events/CPs, not churn cutoffs alone |
 | Dynamics | Trajectory + pack schema are the deliberation contract |
 | Public scorecard | Tool survives real tags without claiming absolute truth |
+| Agent | Coding loop is scored on objective delta, not “has a proposal JSON” |
 
 ## Run evaluation
 
@@ -30,7 +32,7 @@ $env:CODEEVOLVE_SKIP_HF="1"
 $env:CODEEVOLVE_TAXONOMY_HEURISTIC="1"
 $env:CODEEVOLVE_SKIP_EMBED="1"
 
-# Default: synthetic + taxonomy + ecology + dynamics + public
+# Default: synthetic + taxonomy + ecology + dynamics + public + agent
 python -m codeevolve evaluate --md-out eval.md --out eval.json
 
 python -m codeevolve evaluate --suite synthetic
@@ -39,12 +41,13 @@ $env:CODEEVOLVE_SKIP_GHSA = "1"
 python -m codeevolve evaluate --suite ecology
 python -m codeevolve evaluate --suite dynamics
 python -m codeevolve evaluate --suite public --md-out public.md
+python -m codeevolve evaluate --suite agent --md-out eval_agent.md
 python -m codeevolve evaluate --suite all --offline
 ```
 
-Exit code `0` when present suites meet floors: synthetic ≥ 0.70, taxonomy ≥ 0.70, ecology ≥ 0.70, **dynamics ≥ 0.70**, public ≥ 0.55 (if any public cases ran), and combined ≥ 0.55.
+Exit code `0` when present suites meet floors: synthetic ≥ 0.70, taxonomy ≥ 0.70, ecology ≥ 0.70, **dynamics ≥ 0.70**, public ≥ 0.55 (if any public cases ran), **agent ≥ 0.55**, and combined ≥ 0.55.
 
-Combined overall when suites run: **0.25·taxonomy + 0.25·ecology + 0.20·dynamics + 0.20·public + 0.10·synthetic** (missing suites dropped and weights renormalized).
+Combined overall when suites run: **0.25·taxonomy + 0.25·ecology + 0.20·dynamics + 0.20·public + 0.10·synthetic + 0.10·agent** (missing suites dropped and weights renormalized).
 
 ### Synthetic fixtures
 
@@ -96,6 +99,21 @@ python examples/demo_dynamics.py
 | `flask_2.3_to_3.0_major` | 2.3.3→3.0.0 | before/after | coherent heroes; stability within wider tol |
 
 Each analyze runs **detached at the tag** with `git log <ref>` so hotspots/complexity match that tree.
+
+### Agent objective outcomes
+
+Scores the native coding loop on **what happened to the objective**, not whether a proposal JSON exists.
+
+| Case kind | Passing outcome | Failing outcome |
+|-----------|-----------------|-----------------|
+| Apply (`reduce_debt`, `pass_tests`, …) | `score_after.improved` **or** clean rollback (verify/objective reject) | Accepted a no-delta artifact (e.g. sidecar notes that do not move the metric) |
+| Dry-run | Baseline `score_before` captured + proposal has `falsifier`/`measure` (delta-ready) | No measurable baseline |
+
+```powershell
+python -m codeevolve evaluate --suite agent --md-out eval_agent.md
+```
+
+Floor: **≥ 0.55**. Included in `evaluate --suite all` at weight 0.10.
 
 ## Related
 

@@ -131,6 +131,214 @@
           }
         }
       }
+    },
+    {
+      "name": "evolve_toward_objective",
+      "description": "Run the native CodeEvolve coding agent: analyze \u2192 provenance frames \u2192 bounded proposal/edits \u2192 re-score against an objective. Default is dry-run (proposals only); set apply=true to write files.",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "repo"
+        ],
+        "properties": {
+          "repo": {
+            "type": "string",
+            "description": "Local path, owner/name, or GitHub URL"
+          },
+          "objective": {
+            "type": "string",
+            "default": "follow_refactor",
+            "description": "reduce_debt | raise_stability | reduce_risk | stabilize_path | follow_refactor | pass_tests | metric:debt.score:min"
+          },
+          "path": {
+            "type": "string",
+            "description": "Optional path fence"
+          },
+          "wave": {
+            "type": "string",
+            "description": "Prefer refactor wave: stabilize|contain|pay_down|evolve"
+          },
+          "max_rounds": {
+            "type": "integer",
+            "default": 1
+          },
+          "max_commits": {
+            "type": "integer",
+            "default": 200
+          },
+          "apply": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, write edits and keep only improving rounds"
+          },
+          "llm": {
+            "type": "string",
+            "default": "auto",
+            "description": "Provider: auto|slm|hf-qwen|openai|anthropic|grok|kimi|kimik3|openrouter|custom|heuristic"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Alias for llm; wins when both set"
+          },
+          "model": {
+            "type": "string",
+            "description": "Model id override (gpt-4o, claude-sonnet-*, grok-3, kimi-k2, Qwen/\u2026)"
+          },
+          "base_url": {
+            "type": "string",
+            "description": "OpenAI-compatible API base URL for custom/grok/kimi/etc."
+          },
+          "api_key": {
+            "type": "string",
+            "description": "API key override (else provider env vars)"
+          },
+          "model_tier": {
+            "type": "string",
+            "default": "slm",
+            "description": "Local ladder tier: slm|standard|large|frontier"
+          },
+          "verify_cmd": {
+            "type": "string",
+            "description": "Shell command that must pass after apply"
+          },
+          "out": {
+            "type": "string",
+            "description": "Optional path to write AgentRun JSON"
+          },
+          "cognition": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable memory/RAG/morpheme/reflect/tools/compact stack"
+          },
+          "spawn_subagents": {
+            "type": "boolean",
+            "default": true,
+            "description": "Spawn kernel-objective subagents when reflection requests it"
+          },
+          "allow_web": {
+            "type": "boolean",
+            "default": true
+          },
+          "allow_shell": {
+            "type": "boolean",
+            "default": false
+          },
+          "rag_backend": {
+            "type": "string",
+            "default": "memory",
+            "description": "RAG vector backend: memory|chromadb|pinecone|auto"
+          },
+          "max_subagents": {
+            "type": "integer",
+            "default": 3
+          },
+          "use_worktree": {
+            "type": "boolean",
+            "default": true,
+            "description": "Use git branch/worktree session when applying"
+          },
+          "approve": {
+            "type": "boolean",
+            "default": false,
+            "description": "HITL approval before apply"
+          },
+          "auto_approve": {
+            "type": "boolean",
+            "default": false
+          },
+          "max_wall_seconds": {
+            "type": "number"
+          },
+          "max_cost_usd": {
+            "type": "number"
+          },
+          "run_tests_on_apply": {
+            "type": "boolean",
+            "default": true
+          },
+          "parallel_subagents": {
+            "type": "boolean",
+            "default": false
+          },
+          "resume": {
+            "type": "boolean",
+            "default": true,
+            "description": "Resume delta analyze from last session report"
+          },
+          "previous_report": {
+            "type": "string",
+            "description": "Explicit previous report.json for frame:delta:report"
+          },
+          "prefer_frames": {
+            "type": "boolean",
+            "default": true,
+            "description": "Seed steps from frame:basin / frame:delta"
+          },
+          "auto_widen_blast": {
+            "type": "boolean",
+            "default": true
+          },
+          "refuse_huge_blast": {
+            "type": "boolean",
+            "default": true
+          },
+          "write_pr_review": {
+            "type": "boolean",
+            "default": true,
+            "description": "Write deliberation-backed pr_pack.md/json"
+          }
+        }
+      }
+    },
+    {
+      "name": "spawn_kernel_subagents",
+      "description": "Spawn CodeEvolve kernel subagents (stabilize/contain/pay_down/investigate/search/\u2026) with shared in-memory RAG + tooling. Returns findings without applying edits.",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "repo"
+        ],
+        "properties": {
+          "repo": {
+            "type": "string"
+          },
+          "objective": {
+            "type": "string",
+            "default": "follow_refactor"
+          },
+          "kernels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Kernel names; default = decompose objective"
+          },
+          "path": {
+            "type": "string"
+          },
+          "max_agents": {
+            "type": "integer",
+            "default": 3
+          },
+          "allow_web": {
+            "type": "boolean",
+            "default": true
+          },
+          "parallel": {
+            "type": "boolean",
+            "default": false,
+            "description": "Run kernel subagents in parallel with path locks"
+          }
+        }
+      }
+    },
+    {
+      "name": "agent_cognition_info",
+      "description": "Describe the CodeEvolve agent cognitive stack, tools, and kernel catalog.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
     }
   ]
 }

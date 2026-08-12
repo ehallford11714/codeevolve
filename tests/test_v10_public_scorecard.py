@@ -63,11 +63,33 @@ def test_evaluate_all_offline_skips_public(tmp_path, monkeypatch):
     monkeypatch.setenv("CODEEVOLVE_TAXONOMY_HEURISTIC", "1")
     monkeypatch.setenv("CODEEVOLVE_SKIP_HF", "1")
     monkeypatch.setenv("CODEEVOLVE_SKIP_EMBED", "1")
+
+    def _stub_agent_eval(*_a, **_k):
+        return {
+            "suite": "agent",
+            "overall_score": 0.8,
+            "passed_cases": 1,
+            "total_cases": 1,
+            "outcome_counts": {"improved": 1},
+            "cases": [
+                {
+                    "name": "stub_improved",
+                    "score": 0.8,
+                    "passed": True,
+                    "details": {"outcome": "improved", "delta": -0.1, "checks": ["objective_improved"]},
+                }
+            ],
+        }
+
+    monkeypatch.setattr("codeevolve.eval.agent_eval.run_agent_eval", _stub_agent_eval)
     ev = run_evaluation(tmp_path / "eval_work", suite="all", offline=True)
     assert ev.synthetic_score is not None and ev.synthetic_score >= 0.7
     # public should skip without cache
     assert ev.public_score is None or ev.public_skipped
     assert "Public" in ev.markdown or "public" in ev.summary.lower()
+    assert ev.agent_score == 0.8
+    assert "agent=0.8" in ev.summary
+    assert any(c.name == "stub_improved" for c in ev.cases)
 
 
 @pytest.mark.integration
