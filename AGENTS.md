@@ -59,6 +59,7 @@ PYTHONUTF8=1
 | Improve | `evolve_toward_objective` | `repo`, `objective`, optional `path`, `max_rounds`, `apply`, cognition/spawn flags |
 | Kernels | `spawn_kernel_subagents` | Spawn stabilize/contain/pay_down/investigate/search/… subagents |
 | Cognition | `agent_cognition_info` | Memory/RAG/morpheme/tools/kernel catalog |
+| Graph | `context_graph` | Parse/search phylogeny+frames+families+pivots+agentic flow (`sense→deliberate→act→verify`) |
 | Viz | `viz_phylogeny` | Phylogeny with semantic `type_path` divisions / clades / Fitch / gene-flow HTML+SVG |
 
 Default report path if `out` omitted: `.codeevolve/report.json`.
@@ -90,6 +91,7 @@ python -m codeevolve provenance --from-report .codeevolve/report.json --path-pac
 python -m codeevolve provenance --from-report .codeevolve/report.json --frame frame:basin
 python -m codeevolve viz --report .codeevolve/report.json --out .codeevolve/viz.html
 python -m codeevolve viz --report .codeevolve/report.json --out .codeevolve/builder.html --kind 3d
+python -m codeevolve graph --from-report .codeevolve/report.json --from-agent .codeevolve/agent --search investigate --flow
 python -m codeevolve --repo <path|owner/repo> agent --objective reduce_debt --max-rounds 2
 python -m codeevolve.agent --repo . --objective follow_refactor --apply --verify-cmd "pytest -q"
 ```

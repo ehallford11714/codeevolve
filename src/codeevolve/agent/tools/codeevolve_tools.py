@@ -53,3 +53,57 @@ def provenance_hint(root: Path, *, path: str | None = None) -> ToolResult:
         output={"frames": frames, "howto": pack.get("howto"), "path": path},
         meta={"frame_count": len(frames)},
     )
+
+
+def graph_search(
+    root: Path,
+    *,
+    query: str = "",
+    flow: bool = False,
+    kernel: str | None = None,
+    limit: int = 12,
+    family: str | None = None,
+    pivot: str | None = None,
+    precedent: bool | str = False,
+    traverse: str = "wave",
+    depth: int = 2,
+    surface: bool = False,
+) -> ToolResult:
+    report = None
+    report_path = root / ".codeevolve" / "report.json"
+    if report_path.is_file():
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return ToolResult(ok=False, name="graph_search", output=None, error=str(exc))
+    agent_dir = root / ".codeevolve" / "agent"
+    from codeevolve.graph import query_context
+
+    payload = query_context(
+        report=report,
+        agent_dir=agent_dir if agent_dir.is_dir() else None,
+        search=query or None,
+        flow=flow or bool(kernel),
+        kernel=kernel,
+        family=family,
+        pivot=pivot,
+        precedent=precedent,
+        surface=surface,
+        traverse=traverse,
+        depth=depth,
+        limit=limit,
+    )
+    if payload.get("node_count") == 0:
+        return ToolResult(
+            ok=False,
+            name="graph_search",
+            output=payload,
+            error="empty graph — run analyze and/or agent first",
+        )
+    return ToolResult(
+        ok=True,
+        name="graph_search",
+        output=payload,
+        meta={"nodes": payload.get("node_count"), "hits": len(payload.get("hits") or [])},
+    )
+

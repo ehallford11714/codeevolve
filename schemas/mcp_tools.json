@@ -371,6 +371,91 @@
         "type": "object",
         "properties": {}
       }
+    },
+    {
+      "name": "context_graph",
+      "description": "Parse a context graph from report.json and/or an agent run dir, then search it. Families: taxon, context, knowledge, decision, pivot, flow. Use flow=true for sense\u2192deliberate\u2192act\u2192verify walks; traverse=wave (default) expands hits. Does not invent history; silent records stay insufficient.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "from_report": {
+            "type": "string",
+            "description": "Path to report.json"
+          },
+          "from_agent": {
+            "type": "string",
+            "description": "Agent dir (.codeevolve/agent) or run.json / cognition.json"
+          },
+          "previous": {
+            "type": "string",
+            "description": "Previous report.json for delta detection"
+          },
+          "search": {
+            "type": "string",
+            "description": "Search query over graph nodes"
+          },
+          "flow": {
+            "description": "true, or a query string, to return the agentic flow walk",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "kernel": {
+            "type": "string",
+            "description": "Focus flow on a kernel (investigate, pay_down, \u2026)"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Restrict search to a node kind"
+          },
+          "family": {
+            "type": "string",
+            "description": "Family slice/filter: taxon|context|knowledge|decision|pivot|flow"
+          },
+          "pivot": {
+            "type": "string",
+            "description": "Pivot id or type (choose_path, propose, sense, \u2026)"
+          },
+          "precedent": {
+            "description": "true, or a query, for similar past decisions/pivots",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "delta": {
+            "type": "boolean",
+            "description": "Detect threshold crossings vs previous report"
+          },
+          "surface": {
+            "type": "boolean",
+            "description": "Rank delta events for proactive surfacing"
+          },
+          "traverse": {
+            "type": "string",
+            "description": "wave (default) | bfs | flow | pivot | rw | off",
+            "default": "wave"
+          },
+          "depth": {
+            "type": "integer",
+            "default": 2,
+            "description": "Traversal depth"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 20
+          }
+        }
+      }
     }
   ]
 }

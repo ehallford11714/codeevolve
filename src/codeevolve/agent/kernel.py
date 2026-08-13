@@ -49,13 +49,13 @@ KERNEL_CATALOG: dict[str, dict[str, Any]] = {
         "description": "Read/grep/RAG until stance is no longer insufficient",
         "objective": "follow_refactor",
         "wave": None,
-        "tools": ["grep", "file_read", "file_list", "rag_query", "morpheme_scan", "provenance_hint", "memory_add"],
+        "tools": ["grep", "file_read", "file_list", "rag_query", "morpheme_scan", "provenance_hint", "graph_search", "memory_add"],
     },
     "search": {
         "description": "Web + repo search for patterns / APIs",
         "objective": "follow_refactor",
         "wave": None,
-        "tools": ["web_search", "grep", "rag_query", "memory_add"],
+        "tools": ["web_search", "grep", "rag_query", "graph_search", "memory_add"],
     },
     "test": {
         "description": "Close test gaps on fenced paths",

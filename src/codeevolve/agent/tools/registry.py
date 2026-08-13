@@ -155,6 +155,35 @@ def build_default_registry(
             {"path": "string"},
         )
     )
+    reg.register(
+        ToolSpec(
+            "graph_search",
+            "Parse/search the context graph (families, pivots, agentic flow, precedent).",
+            lambda query="", flow=False, kernel=None, limit=12, family=None, pivot=None, traverse="wave", precedent=False, depth=2: ce_tools.graph_search(
+                root,
+                query=query,
+                flow=bool(flow),
+                kernel=kernel,
+                limit=limit,
+                family=family,
+                pivot=pivot,
+                traverse=str(traverse or "wave"),
+                precedent=precedent,
+                depth=int(depth or 2),
+            ),
+            {
+                "query": "string",
+                "flow": "boolean",
+                "kernel": "string",
+                "limit": "integer",
+                "family": "string",
+                "pivot": "string",
+                "traverse": "string",
+                "precedent": "boolean",
+                "depth": "integer",
+            },
+        )
+    )
     if allow_web:
         reg.register(
             ToolSpec(

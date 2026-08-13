@@ -701,6 +701,16 @@ class EvolveAgent:
                 json.dumps(round_res.to_dict(), indent=2, default=str),
                 encoding="utf-8",
             )
+            try:
+                from codeevolve.graph.store import write_round_traces
+
+                write_round_traces(
+                    round_res.to_dict(),
+                    out_dir=self.work_dir,
+                    report=current_report if isinstance(current_report, dict) else None,
+                )
+            except OSError:
+                notes.append("context-graph write-back skipped")
 
             if score_after and score_after.reached_target:
                 run.status = "target_reached"

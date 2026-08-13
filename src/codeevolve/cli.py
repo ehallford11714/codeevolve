@@ -154,6 +154,24 @@ def main(argv: list[str] | None = None) -> int:
     vz.add_argument("--format", dest="fmt", default="html", choices=["html", "svg", "json", "newick"])
     vz.add_argument("--collapse-unary", action="store_true", help="Hide unary same-clade chains")
 
+    gr = sub.add_parser("graph", help="Parse/search context graph and agentic flow")
+    gr.add_argument("--from-report", dest="from_report", default=None, help="report.json (default .codeevolve/report.json if present)")
+    gr.add_argument("--from-agent", dest="from_agent", default=None, help="Agent dir (.codeevolve/agent) or run.json")
+    gr.add_argument("--search", default=None, help="Search nodes (tools, kernels, frames, types, …)")
+    gr.add_argument("--flow", nargs="?", const=True, default=False, help="Extract agentic flow (optional extra query)")
+    gr.add_argument("--kernel", default=None, help="Focus flow on a kernel name (investigate, pay_down, …)")
+    gr.add_argument("--kind", action="append", default=[], help="Restrict search to node kind (repeatable)")
+    gr.add_argument("--family", default=None, help="Family slice or search filter: taxon|context|knowledge|decision|pivot|flow")
+    gr.add_argument("--pivot", default=None, help="Pivot id or type (choose_path, propose, sense, …)")
+    gr.add_argument("--precedent", nargs="?", const=True, default=False, help="Similar past decisions/pivots")
+    gr.add_argument("--previous", default=None, help="Previous report.json for delta detection")
+    gr.add_argument("--delta", action="store_true", help="Emit threshold-crossing delta nodes vs --previous")
+    gr.add_argument("--surface", action="store_true", help="Rank deltas for proactive surfacing")
+    gr.add_argument("--traverse", default="wave", help="Search traversal: wave|bfs|flow|pivot|rw|off")
+    gr.add_argument("--depth", type=int, default=2, help="Traversal depth")
+    gr.add_argument("--limit", type=int, default=20)
+    gr.add_argument("--out", default=None, help="Write JSON")
+
     ev = sub.add_parser("evaluate", help="Run evaluation (synthetic + taxonomy gold + public scorecard)")
     ev.add_argument("--work-dir", default=None, help="Scratch dir for fixtures (default .codeevolve_eval)")
     ev.add_argument("--out", default=None, help="Write evaluation JSON")
@@ -428,6 +446,49 @@ def main(argv: list[str] | None = None) -> int:
             collapse_unary=bool(args.collapse_unary),
         )
         print(out)
+        return 0
+
+    if args.cmd == "graph":
+        from codeevolve.graph import query_context
+
+        report = None
+        report_path = args.from_report
+        if not report_path:
+            guess = Path(".codeevolve") / "report.json"
+            if guess.is_file() and not args.from_agent:
+                report_path = str(guess)
+            elif guess.is_file() and args.from_agent:
+                report_path = str(guess)
+        if report_path:
+            report = json.loads(Path(report_path).read_text(encoding="utf-8"))
+        agent_dir = args.from_agent
+        if not agent_dir and not report_path:
+            guess_agent = Path(".codeevolve") / "agent"
+            if guess_agent.is_dir():
+                agent_dir = str(guess_agent)
+        prev_report = None
+        if getattr(args, "previous", None):
+            prev_report = json.loads(Path(args.previous).read_text(encoding="utf-8"))
+        payload = query_context(
+            report=report,
+            agent_dir=agent_dir,
+            previous=prev_report,
+            search=args.search,
+            flow=args.flow,
+            kernel=args.kernel,
+            kinds=list(args.kind) or None,
+            family=getattr(args, "family", None),
+            pivot=getattr(args, "pivot", None),
+            precedent=getattr(args, "precedent", False),
+            delta=bool(getattr(args, "delta", False)),
+            surface=bool(getattr(args, "surface", False)),
+            traverse=getattr(args, "traverse", "wave"),
+            depth=int(getattr(args, "depth", 2) or 2),
+            limit=args.limit,
+        )
+        if args.out:
+            Path(args.out).write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+        _print(payload)
         return 0
 
     ce = CodeEvolve(

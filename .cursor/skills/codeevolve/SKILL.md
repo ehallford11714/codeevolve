@@ -20,6 +20,7 @@ CodeEvolve does **not** invent “why this line exists.” It builds a **history
 
 - User asks how a repo evolved, what stage it is in, or what is risky to touch
 - User wants a phylogeny / clade / parsimony picture of the codebase (`viz_phylogeny`)
+- User wants to parse/search an agent run or context graph (`context_graph`)
 - Before large refactors: need path-centric provenance (blast, episodes, frames)
 - PR/CI: compare current analyze to a previous `report.json`
 - MCP tools `analyze_repo` or `provenance_*` are available
@@ -40,7 +41,7 @@ pip install -e "path\to\codeevolve"
 pip install "git+https://github.com/ehallford11714/codeevolve.git"
 ```
 
-Reload MCP / restart Cursor after install. Tools: `analyze_repo`, `provenance_*`, `viz_phylogeny`, `evolve_toward_objective`, `spawn_kernel_subagents`, `agent_cognition_info`.
+Reload MCP / restart Cursor after install. Tools: `analyze_repo`, `provenance_*`, `viz_phylogeny`, `evolve_toward_objective`, `spawn_kernel_subagents`, `agent_cognition_info`, `context_graph`.
 
 ## Standard workflow
 
@@ -78,6 +79,7 @@ python -m codeevolve provenance --from-report .codeevolve/report.json --path-pac
 python -m codeevolve provenance --from-report .codeevolve/report.json --frame frame:basin
 python -m codeevolve viz --report .codeevolve/report.json --out .codeevolve/viz.html
 python -m codeevolve viz --report .codeevolve/report.json --out .codeevolve/builder.html --kind 3d
+python -m codeevolve graph --from-report .codeevolve/report.json --from-agent .codeevolve/agent --search investigate --flow
 python examples/demo_dynamics.py
 ```
 
@@ -97,4 +99,5 @@ python examples/demo_dynamics.py
 - `docs/DEMO_DYNAMICS.md` — real-tag demo
 - `docs/MCP.md` — MCP setup
 - `docs/VIZ.md` — phylogeny with semantic type_path divisions / clade / parsimony gallery
+- `docs/GRAPH.md` — context graph families, pivots, traversal search
 - `docs/TUTORIAL.md` — end-to-end

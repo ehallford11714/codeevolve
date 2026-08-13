@@ -28,7 +28,7 @@ objective
 | **Morphemes** | Identifier/path morphology mapped onto the CodeEvolve keyword ontology |
 | **Reflection** | Stance: `continue` \| `pivot` \| `stop` \| `spawn` |
 | **Action** | Plans tool calls from reflection |
-| **Tools** | `file_read`, `file_list`, `grep`, `rag_query`, `morpheme_scan`, `memory_*`, `provenance_hint`, `web_search`, optional `shell` |
+| **Tools** | `file_read`, `file_list`, `grep`, `rag_query`, `morpheme_scan`, `memory_*`, `provenance_hint`, `graph_search`, `web_search`, optional `shell` |
 | **Tool-calling** | Structured JSON schemas (`apply_patch`, `done`, …) preferred over free-form |
 | **Frame seed** | Prefer `frame:basin` / `frame:delta` paths over cold refactor waves |
 | **Session delta** | `session.json` + previous report → `frame:delta:report` memory across runs |
@@ -47,12 +47,13 @@ python -m codeevolve --repo . agent --objective reduce_debt --max-subagents 2
 python -m codeevolve --repo . agent --objective pass_tests+cov --apply --auto-approve
 python -m codeevolve --repo . agent --apply --approve --max-cost-usd 1.0
 python -m codeevolve --repo . agent --previous-report .codeevolve/report.json
+python -m codeevolve graph --from-agent .codeevolve/agent --search investigate --flow
 # after a run: gh pr comment --body-file .codeevolve/agent/pr_pack.md
 python -m codeevolve evaluate --suite agent
 python -m codeevolve evaluate --suite all --offline   # agent is included; scores objective delta / rollback
 ```
 
-MCP: `evolve_toward_objective`, `spawn_kernel_subagents`, `agent_cognition_info`.
+MCP: `evolve_toward_objective`, `spawn_kernel_subagents`, `agent_cognition_info`, `context_graph`.
 
 ## Kernel objectives
 

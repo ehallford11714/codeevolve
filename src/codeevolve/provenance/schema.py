@@ -381,6 +381,51 @@ MCP_TOOLS: list[dict[str, Any]] = [
         "description": "Describe the CodeEvolve agent cognitive stack, tools, and kernel catalog.",
         "inputSchema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "context_graph",
+        "description": (
+            "Parse a context graph from report.json and/or an agent run dir, then search it. "
+            "Families: taxon, context, knowledge, decision, pivot, flow. "
+            "Use flow=true for sense→deliberate→act→verify walks; traverse=wave (default) expands hits. "
+            "Does not invent history; silent records stay insufficient."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "from_report": {"type": "string", "description": "Path to report.json"},
+                "from_agent": {
+                    "type": "string",
+                    "description": "Agent dir (.codeevolve/agent) or run.json / cognition.json",
+                },
+                "previous": {"type": "string", "description": "Previous report.json for delta detection"},
+                "search": {"type": "string", "description": "Search query over graph nodes"},
+                "flow": {
+                    "description": "true, or a query string, to return the agentic flow walk",
+                    "oneOf": [{"type": "boolean"}, {"type": "string"}],
+                },
+                "kernel": {"type": "string", "description": "Focus flow on a kernel (investigate, pay_down, …)"},
+                "kind": {"type": "string", "description": "Restrict search to a node kind"},
+                "family": {
+                    "type": "string",
+                    "description": "Family slice/filter: taxon|context|knowledge|decision|pivot|flow",
+                },
+                "pivot": {"type": "string", "description": "Pivot id or type (choose_path, propose, sense, …)"},
+                "precedent": {
+                    "description": "true, or a query, for similar past decisions/pivots",
+                    "oneOf": [{"type": "boolean"}, {"type": "string"}],
+                },
+                "delta": {"type": "boolean", "description": "Detect threshold crossings vs previous report"},
+                "surface": {"type": "boolean", "description": "Rank delta events for proactive surfacing"},
+                "traverse": {
+                    "type": "string",
+                    "description": "wave (default) | bfs | flow | pivot | rw | off",
+                    "default": "wave",
+                },
+                "depth": {"type": "integer", "default": 2, "description": "Traversal depth"},
+                "limit": {"type": "integer", "default": 20},
+            },
+        },
+    },
 ]
 
 
@@ -609,6 +654,53 @@ def dispatch_mcp_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         from codeevolve.agent.cognition import describe_cognition
 
         return describe_cognition()
+    if name == "context_graph":
+        from codeevolve.graph import query_context
+
+        report = arguments.get("report")
+        path = arguments.get("from_report")
+        if report is None and path:
+            report = json.loads(Path(path).read_text(encoding="utf-8"))
+        if report is None and not arguments.get("from_agent"):
+            guess = Path.cwd() / ".codeevolve" / "report.json"
+            if guess.is_file():
+                report = json.loads(guess.read_text(encoding="utf-8"))
+        agent_dir = arguments.get("from_agent")
+        if not agent_dir:
+            guess_a = Path.cwd() / ".codeevolve" / "agent"
+            if guess_a.is_dir() and ((guess_a / "run.json").is_file() or (guess_a / "cognition.json").is_file()):
+                agent_dir = str(guess_a)
+        if report is None and not agent_dir:
+            return {
+                "error": "from_report or from_agent required",
+                "hint": "analyze_repo and/or evolve_toward_objective, then context_graph",
+            }
+        kinds = arguments.get("kind")
+        if isinstance(kinds, str):
+            kinds = [kinds]
+        prev = arguments.get("previous")
+        prev_report = None
+        if isinstance(prev, str) and prev:
+            prev_report = json.loads(Path(prev).read_text(encoding="utf-8"))
+        elif isinstance(prev, dict):
+            prev_report = prev
+        return query_context(
+            report=report if isinstance(report, dict) else None,
+            agent_dir=agent_dir,
+            previous=prev_report,
+            search=arguments.get("search"),
+            flow=arguments.get("flow") or False,
+            kernel=arguments.get("kernel"),
+            kinds=kinds,
+            family=arguments.get("family"),
+            pivot=arguments.get("pivot"),
+            precedent=arguments.get("precedent") or False,
+            delta=bool(arguments.get("delta")),
+            surface=bool(arguments.get("surface")),
+            traverse=arguments.get("traverse") if arguments.get("traverse") is not None else True,
+            depth=int(arguments.get("depth") or 2),
+            limit=int(arguments.get("limit") or 20),
+        )
     if name == "spawn_kernel_subagents":
         from codeevolve.agent.kernel import decompose_objective
         from codeevolve.agent.objective import Objective

@@ -48,6 +48,7 @@ CLI / CodeEvolve(repo|github-url)
 | `provenance/` | Dynamics + ledger + schema/MCP dispatch |
 | `mcp/` | Stdio MCP server (Content-Length JSON-RPC) + JSONL legacy mode |
 | `agent/` | Cognitive coding agent (memory, RAG, morphemes, reflect/act/compact, kernel subagents, tools) |
+| `graph/` | Context graph families, pivots, decision traces, traversal search, write-back |
 | `eval/` | Synthetic, taxonomy gold, ecology, **dynamics**, public scorecard, agent outcomes |
 | `viz/` | 3D phylogeny builder (semantic type_path divisions + intent + analysis) + clade tree + Fitch parsimony + gene-flow |
 | `refactor/` | Phased plan + effort heuristics |
@@ -77,8 +78,9 @@ Stages are computed **globally** and **per clade**, then optionally **recalibrat
 | `report.provenance` | Full ledger + frames |
 | `provenance` CLI | pack / path-pack / frame / resolve / timeline / schema |
 | `schemas/` | Deliberation pack JSON Schema + MCP tool list |
-| `python -m codeevolve.mcp` | MCP stdio (`analyze_repo` + provenance_* + `viz_phylogeny` + `evolve_toward_objective`) |
+| `python -m codeevolve.mcp` | MCP stdio (`analyze_repo` + provenance_* + `viz_phylogeny` + `evolve_toward_objective` + `context_graph`) |
 | `python -m codeevolve viz` | 3D phylogeny builder (type_path / intent / analysis) + 2D clade/parsimony/gene-flow |
+| `python -m codeevolve graph` | Parse/search context graph and agentic flow |
 | `python -m codeevolve.agent` | Objective improve loop (dry-run or `--apply`) |
 
 Rationale and kinds: [PROVENANCE.md](PROVENANCE.md).
