@@ -39,19 +39,20 @@ def layout_layered_dag(
     y_gap: float = 28.0,
     collapse_unary: bool = False,
     clade_of: dict[str, str] | None = None,
+    order_of: dict[str, str] | None = None,
     max_visible: int = 480,
 ) -> GraphLayout:
     """Place commits on a generation × DFS-order grid.
 
     Extra parents (merges) are ignored for y-order; callers still draw them.
-    Unary chains with a stable clade can be collapsed for large histories.
+    Unary chains with a stable semantic type can be collapsed for large histories.
     """
     id_set = set(node_ids)
     hidden: set[str] = set()
     if collapse_unary:
         hidden = _unary_collapse(node_ids, parents, children, clade_of)
 
-    order = _dfs_order(node_ids, children, roots)
+    order = _dfs_order(node_ids, children, roots, order_key=order_of or clade_of)
     if len(order) - len(hidden) > max_visible:
         # keep roots, leaves, merges, and a stride sample of the rest
         keep = _priority_keep(node_ids, parents, children, roots, max_visible)
@@ -165,6 +166,7 @@ def layout_phylogeny_3d(
         y_gap=y_gap,
         collapse_unary=collapse_unary,
         clade_of=clade_of,
+        order_of=clade_of,
     )
     zmax = 0.0
     for nid, n in lay.nodes.items():
@@ -183,7 +185,12 @@ def nearest_visible_ancestor(nid: str, parent: dict[str, str], hidden: set[str])
     return None
 
 
-def _dfs_order(node_ids: list[str], children: dict[str, list[str]], roots: list[str]) -> list[str]:
+def _dfs_order(
+    node_ids: list[str],
+    children: dict[str, list[str]],
+    roots: list[str],
+    order_key: dict[str, str] | None = None,
+) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
     id_set = set(node_ids)
@@ -193,7 +200,10 @@ def _dfs_order(node_ids: list[str], children: dict[str, list[str]], roots: list[
             return
         seen.add(nid)
         out.append(nid)
-        for ch in children.get(nid) or []:
+        kids = [c for c in (children.get(nid) or []) if c]
+        if order_key:
+            kids.sort(key=lambda c: (order_key.get(c) or "", c))
+        for ch in kids:
             visit(ch)
 
     for r in roots:

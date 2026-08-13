@@ -96,5 +96,5 @@ python examples/demo_dynamics.py
 - `docs/DYNAMICS.md` — state trajectory
 - `docs/DEMO_DYNAMICS.md` — real-tag demo
 - `docs/MCP.md` — MCP setup
-- `docs/VIZ.md` — phylogeny / clade / parsimony gallery
+- `docs/VIZ.md` — phylogeny with semantic type_path divisions / clade / parsimony gallery
 - `docs/TUTORIAL.md` — end-to-end

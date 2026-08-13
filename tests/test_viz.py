@@ -141,7 +141,32 @@ def _mini_report() -> dict:
                         {"name": "architecture", "count": 1, "children": []},
                         {"name": "quality", "count": 1, "children": []},
                     ],
-                }
+                },
+                "path_types": {
+                    "a.py": {
+                        "path": "a.py",
+                        "type_path": ["architecture", "api"],
+                        "type_key": "architecture/api",
+                        "confidence": 0.9,
+                        "matched": ["api"],
+                        "layer_hint": "core",
+                    },
+                    "b.py": {
+                        "path": "b.py",
+                        "type_path": ["quality", "test"],
+                        "type_key": "quality/test",
+                        "confidence": 0.9,
+                        "matched": ["test"],
+                        "layer_hint": "test",
+                    },
+                },
+            },
+            "semantic": {
+                "path_to_niche": {"a.py": "niche:api", "b.py": "niche:test"},
+                "niches": [
+                    {"id": "niche:api", "label": "API surface"},
+                    {"id": "niche:test", "label": "tests"},
+                ],
             },
         },
         "genetics": {
@@ -231,6 +256,54 @@ def test_sample_repo_viz(sample_repo: Path, monkeypatch, tmp_path: Path) -> None
     out = tmp_path / "phylo.html"
     write_viz(report, out)
     assert out.is_file()
+
+
+def test_layout_groups_siblings_by_type() -> None:
+    lay = layout_layered_dag(
+        ["r", "b", "a"],
+        parents={"r": [], "a": ["r"], "b": ["r"]},
+        children={"r": ["b", "a"], "a": [], "b": []},
+        generation={"r": 0, "a": 1, "b": 1},
+        roots=["r"],
+        order_of={"r": "architecture/api", "a": "architecture/api", "b": "quality/test"},
+    )
+    assert lay.nodes["a"].y < lay.nodes["b"].y
+
+
+def test_semantic_type_divisions() -> None:
+    model = build_model(_mini_report())
+    by = {c.sha: c for c in model.commits}
+    assert by["aaa"].type_key == "architecture/api"
+    assert by["aaa"].type_path == ["architecture", "api"]
+    assert by["aaa"].division_source == "keyword"
+    assert by["aaa"].niche_label == "API surface"
+    assert by["ccc"].type_key == "quality/test"
+    assert by["ccc"].niche_id == "niche:test"
+    assert model.parsimony.character == "type_path"
+    assert model.parsimony.steps >= 1
+    assert 1 in by["aaa"].reconstructed_depths
+    assert by["aaa"].reconstructed_depths[1] == "architecture"
+    assert by["ccc"].reconstructed_depths[1] == "quality"
+    assert "architecture/api" in model.division_counts
+    assert "quality/test" in model.division_counts
+    payload = builder_payload(model)
+    assert payload["meta"]["parsimony"]
+    assert any(n.get("type_key") == "architecture/api" for n in payload["nodes"])
+    assert any(n.get("zType") is not None for n in payload["nodes"])
+    html = render_viz(_mini_report(), kind="parsimony")
+    assert "semantic type" in html.lower() or "Fitch parsimony (semantic type)" in html
+
+
+def test_division_falls_back_to_clade() -> None:
+    report = _mini_report()
+    report["taxonomy"]["keyword_taxonomy"].pop("path_types", None)
+    report["taxonomy"].pop("semantic", None)
+    model = build_model(report)
+    by = {c.sha: c for c in model.commits}
+    assert by["aaa"].division == "clade:core"
+    assert by["aaa"].division_source == "clade"
+    assert not by["aaa"].type_key
+    assert model.parsimony.character == "clade"
 
 
 def test_builder_payload_intent_and_frames() -> None:

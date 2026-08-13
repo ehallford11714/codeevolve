@@ -31,7 +31,10 @@ def scene_svg(model: VizModel, kind: str, *, collapse_unary: bool = False) -> st
 
 
 def newick_of(model: VizModel) -> str:
-    labels = {c.sha: f"{c.sha[:7]}_{c.clade_id}" if c.clade_id else c.sha[:7] for c in model.commits}
+    labels = {
+        c.sha: f"{c.sha[:7]}_{c.type_key or c.clade_id}" if (c.type_key or c.clade_id) else c.sha[:7]
+        for c in model.commits
+    }
     return to_newick(model.tree_children, model.roots, labels)
 
 
@@ -99,9 +102,10 @@ def render_gallery(model: VizModel, *, collapse_unary: bool = False) -> str:
   <div class="meta">{title} · { _esc(stats) }</div>
 </header>
 <nav>{''.join(labels)}</nav>
-<p class="hint">3D builder: X = generation, Y = lineage, Z = intent / clade / analysis / stage.
-Color and Z are switchable. Intent is classified from the commit subject (insufficient if silent).
-Click a node for analysis + deliberation frames. 2D tabs: fill = stage or reconstructed clade; dashed orange = merges; pink = Fitch changes.</p>
+<p class="hint">3D builder: X = generation, Y = lineage, Z = semantic type / intent / clade / analysis / stage.
+Each division is a keyword type_path (domain/family/kind/specialty) voted from allocated paths; silent types stay insufficient.
+Color and Z are switchable. Intent is classified from the commit subject. Click a node for analysis + deliberation frames.
+2D tabs: stroke = type; fill = stage or reconstructed type; dashed orange = merges; pink = Fitch type changes.</p>
 <div class="wrap">{''.join(panels)}</div>
 <details>
   <summary>Newick (first-parent spanning tree)</summary>

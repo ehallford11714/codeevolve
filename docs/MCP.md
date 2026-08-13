@@ -53,7 +53,7 @@ Agent skill (project): [`.cursor/skills/codeevolve/SKILL.md`](../.cursor/skills/
 | 4 | `provenance_path_pack` | Before editing a hotspot path |
 | 5 | `provenance_resolve` / `provenance_timeline` | Walk evidence / chronology |
 | 6 | `evolve_toward_objective` | Dry-run or apply bounded improvements scored by re-analysis |
-| 7 | `viz_phylogeny` | Phylogeny / clades / Fitch parsimony / gene-flow from `report.json` |
+| 7 | `viz_phylogeny` | Phylogeny with semantic `type_path` divisions / clades / Fitch parsimony / gene-flow from `report.json` |
 
 `analyze_repo` arguments:
 

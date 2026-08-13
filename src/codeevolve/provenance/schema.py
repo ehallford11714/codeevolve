@@ -187,9 +187,11 @@ MCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "viz_phylogeny",
         "description": (
-            "Render 3D phylogeny builder (intent + analysis) or 2D clade / Fitch / gene-flow "
-            "SVG+HTML from a report.json. Writes a gallery (or SVG/Newick). Use after analyze_repo. "
-            "Does not invent history — colors, intent, and steps come from subjects + allocations + the commit DAG."
+            "Render 3D phylogeny builder (semantic type_path divisions + intent + analysis) or 2D "
+            "clade / Fitch / gene-flow SVG+HTML from a report.json. Each tree split is a keyword "
+            "type_path taxon (domain/family/kind/specialty) voted from allocated paths; Fitch "
+            "reconstructs each ontology depth. Writes a gallery (or SVG/Newick). Use after analyze_repo. "
+            "Does not invent history — silent types stay insufficient."
         ),
         "inputSchema": {
             "type": "object",
@@ -212,7 +214,7 @@ MCP_TOOLS: list[dict[str, Any]] = [
                 "collapse_unary": {
                     "type": "boolean",
                     "default": False,
-                    "description": "Hide unary same-clade chains on large DAGs",
+                    "description": "Hide unary same-type chains on large DAGs",
                 },
             },
         },

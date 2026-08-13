@@ -13,7 +13,7 @@ def render_phylogeny_svg(model: VizModel, *, collapse_unary: bool = False) -> st
     parents = {c.sha: list(c.parents) for c in model.commits}
     children = {c.sha: list(c.children) for c in model.commits}
     generation = {c.sha: c.generation for c in model.commits}
-    clade_of = {c.sha: c.clade_id for c in model.commits}
+    type_of = {c.sha: (c.division or c.clade_id) for c in model.commits}
     lay = layout_layered_dag(
         ids,
         parents=parents,
@@ -21,7 +21,8 @@ def render_phylogeny_svg(model: VizModel, *, collapse_unary: bool = False) -> st
         generation=generation,
         roots=model.roots,
         collapse_unary=collapse_unary,
-        clade_of=clade_of,
+        clade_of=type_of,
+        order_of=type_of,
     )
     svg = Svg(lay.width, lay.height, title=f"Phylogeny {model.repo}")
     for c in model.commits:
@@ -57,10 +58,14 @@ def render_phylogeny_svg(model: VizModel, *, collapse_unary: bool = False) -> st
             n.y,
             6.5,
             fill=stage_color(c.stage),
-            stroke=clade_color(c.clade_id),
-            title=f"{c.sha[:7]} {c.subject}\nclade={c.clade_label or c.clade_id or '?'} stage={c.stage}",
+            stroke=clade_color(c.division or c.clade_id),
+            title=f"{c.sha[:7]} {c.subject}\ntype={c.type_key or c.division or '?'} niche={c.niche_label or '—'} clade={c.clade_label or c.clade_id or '?'} stage={c.stage}",
         )
-        svg.text(n.x + 9, n.y + 3.5, c.sha[:7], size=9, fill="#8b9aab")
+        label = c.sha[:7]
+        if c.type_key:
+            short = c.type_key.split("/")[-1]
+            label = f"{c.sha[:7]} {short}"
+        svg.text(n.x + 9, n.y + 3.5, label[:22], size=9, fill="#8b9aab")
     _legend_stages(svg, lay)
     return svg.tostring()
 
@@ -71,7 +76,7 @@ def render_parsimony_svg(model: VizModel, *, collapse_unary: bool = False) -> st
     children = {k: list(v) for k, v in model.tree_children.items()}
     generation = {c.sha: c.generation for c in model.commits}
     rec = model.parsimony.reconstructed
-    clade_of = {c.sha: rec.get(c.sha) or c.clade_id for c in model.commits}
+    type_of = {c.sha: rec.get(c.sha) or c.division or c.clade_id for c in model.commits}
     lay = layout_layered_dag(
         ids,
         parents=parents,
@@ -79,9 +84,10 @@ def render_parsimony_svg(model: VizModel, *, collapse_unary: bool = False) -> st
         generation=generation,
         roots=model.roots,
         collapse_unary=collapse_unary,
-        clade_of=clade_of,
+        clade_of=type_of,
+        order_of=type_of,
     )
-    svg = Svg(lay.width, lay.height, title="Fitch parsimony (clade)")
+    svg = Svg(lay.width, lay.height, title="Fitch parsimony (semantic type)")
     for child, par in model.tree_parent.items():
         if child not in lay.nodes or par not in lay.nodes:
             continue
@@ -94,21 +100,20 @@ def render_parsimony_svg(model: VizModel, *, collapse_unary: bool = False) -> st
             par = vis
         changed = rec.get(par) != rec.get(child) or (par, child) in model.parsimony.change_edges
         svg.line(a.x, a.y, b.x, b.y, stroke="#e07a9a" if changed else "#3a4a5c", width=2.2 if changed else 1.15)
-    by = {c.sha: c for c in model.commits}
     for c in model.commits:
         n = lay.nodes[c.sha]
         if n.hidden:
             continue
-        state = rec.get(c.sha) or c.clade_id
+        state = rec.get(c.sha) or c.division or c.clade_id
         svg.circle(
             n.x,
             n.y,
             6.5,
             fill=clade_color(state),
             stroke="#e07a9a" if any(e[1] == c.sha for e in model.parsimony.change_edges) else "#0f1419",
-            title=f"{c.sha[:7]} reconstructed={state}\nobserved={c.clade_id or '—'}",
+            title=f"{c.sha[:7]} reconstructed={state}\nobserved={c.type_key or c.division or c.clade_id or '—'}\ndepths={c.reconstructed_depths}",
         )
-        svg.text(n.x + 9, n.y + 3.5, (by[c.sha].clade_label or state or c.sha[:7])[:18], size=9, fill="#c5d0dc")
+        svg.text(n.x + 9, n.y + 3.5, (c.type_key or c.clade_label or state or c.sha[:7])[:22], size=9, fill="#c5d0dc")
     p = model.parsimony
     svg.text(
         0,

@@ -134,7 +134,7 @@
     },
     {
       "name": "viz_phylogeny",
-      "description": "Render phylogeny / clade / Fitch parsimony / gene-flow SVG+HTML from a report.json. Writes a gallery (or SVG/Newick). Use after analyze_repo. Does not invent history \u2014 colors and steps come from allocations + the commit DAG.",
+      "description": "Render 3D phylogeny builder (semantic type_path divisions + intent + analysis) or 2D clade / Fitch / gene-flow SVG+HTML from a report.json. Each tree split is a keyword type_path taxon (domain/family/kind/specialty) voted from allocated paths; Fitch reconstructs each ontology depth. Writes a gallery (or SVG/Newick). Use after analyze_repo. Does not invent history \u2014 silent types stay insufficient.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -149,7 +149,7 @@
           "kind": {
             "type": "string",
             "default": "all",
-            "description": "all | phylogeny | clades | parsimony | gene-flow"
+            "description": "all | 3d | phylogeny | clades | parsimony | gene-flow"
           },
           "format": {
             "type": "string",
@@ -159,7 +159,7 @@
           "collapse_unary": {
             "type": "boolean",
             "default": false,
-            "description": "Hide unary same-clade chains on large DAGs"
+            "description": "Hide unary same-type chains on large DAGs"
           }
         }
       }

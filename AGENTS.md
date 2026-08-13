@@ -59,7 +59,7 @@ PYTHONUTF8=1
 | Improve | `evolve_toward_objective` | `repo`, `objective`, optional `path`, `max_rounds`, `apply`, cognition/spawn flags |
 | Kernels | `spawn_kernel_subagents` | Spawn stabilize/contain/pay_down/investigate/search/… subagents |
 | Cognition | `agent_cognition_info` | Memory/RAG/morpheme/tools/kernel catalog |
-| Viz | `viz_phylogeny` | Phylogeny / clades / Fitch parsimony / gene-flow HTML+SVG |
+| Viz | `viz_phylogeny` | Phylogeny with semantic `type_path` divisions / clades / Fitch / gene-flow HTML+SVG |
 
 Default report path if `out` omitted: `.codeevolve/report.json`.
 

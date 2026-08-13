@@ -19,17 +19,20 @@ def builder_payload(model: VizModel) -> dict[str, Any]:
     parents = {c.sha: list(c.parents) for c in model.commits}
     children = {c.sha: list(c.children) for c in model.commits}
     generation = {c.sha: c.generation for c in model.commits}
-    clade_of = {c.sha: c.clade_id for c in model.commits}
+    type_of = {c.sha: (c.division or c.clade_id) for c in model.commits}
     lay = layout_layered_dag(
         ids,
         parents=parents,
         children=children,
         generation=generation,
         roots=model.roots,
-        clade_of=clade_of,
+        clade_of=type_of,
+        order_of=type_of,
     )
     clades = sorted({c.clade_id for c in model.commits if c.clade_id})
     clade_z = {cid: i for i, cid in enumerate(clades)}
+    types = sorted({c.division for c in model.commits if c.division})
+    type_z = {t: i for i, t in enumerate(types)}
     id_set = set(ids)
     short = {s[:7]: s for s in ids}
 
@@ -53,12 +56,21 @@ def builder_payload(model: VizModel) -> dict[str, Any]:
                 "y": n.y,
                 "zIntent": intent_rank(c.intent) * 48.0,
                 "zClade": clade_z.get(c.clade_id, 0) * 48.0,
+                "zType": type_z.get(c.division, 0) * 48.0,
                 "zAnalysis": c.analysis_score * 240.0,
                 "zStage": (_STAGES.index(c.stage) if c.stage in _STAGES else 0) * 48.0,
                 "parents": [resolve(p) for p in c.parents if resolve(p)],
                 "clade_id": c.clade_id,
                 "clade_label": c.clade_label,
                 "clade_color": clade_color(c.clade_id),
+                "type_path": list(c.type_path),
+                "type_key": c.type_key,
+                "type_color": clade_color(c.division or c.type_key or c.clade_id),
+                "niche_id": c.niche_id,
+                "niche_label": c.niche_label,
+                "division": c.division,
+                "division_source": c.division_source,
+                "reconstructed_depths": {str(k): v for k, v in c.reconstructed_depths.items()},
                 "stage": c.stage,
                 "stage_color": stage_color(c.stage),
                 "intent": c.intent,
@@ -111,6 +123,8 @@ def builder_payload(model: VizModel) -> dict[str, Any]:
             "branch_factor": model.branch_factor,
             "current_stage": model.current_stage,
             "intent_counts": dict(model.intent_counts),
+            "division_counts": dict(model.division_counts),
+            "type_depths": dict((model.analysis or {}).get("type_depths") or {}),
             "parsimony": {
                 "steps": model.parsimony.steps,
                 "ci": model.parsimony.consistency_index,
@@ -126,7 +140,7 @@ def builder_payload(model: VizModel) -> dict[str, Any]:
         "axes": {
             "x": "generation (time)",
             "y": "lineage rank",
-            "z": "intent | clade | analysis | stage",
+            "z": "type | intent | clade | analysis | stage",
         },
     }
 
@@ -193,12 +207,14 @@ _INNER = """
     <canvas id="phy3d-canvas" width="960" height="640"></canvas>
     <div class="phy3d-toolbar">
       <label>color <select id="phy3d-color">
+        <option value="type">type</option>
         <option value="intent">intent</option>
         <option value="clade">clade</option>
         <option value="stage">stage</option>
         <option value="parsimony">parsimony</option>
       </select></label>
       <label>Z <select id="phy3d-z">
+        <option value="zType">type</option>
         <option value="zIntent">intent</option>
         <option value="zClade">clade</option>
         <option value="zAnalysis">analysis</option>
@@ -207,7 +223,7 @@ _INNER = """
       <label><input type="checkbox" id="phy3d-tree" checked/> tree</label>
       <label><input type="checkbox" id="phy3d-merge" checked/> merges</label>
       <label><input type="checkbox" id="phy3d-pars" checked/> parsimony</label>
-      <input id="phy3d-q" placeholder="filter sha / subject / intent" size="22"/>
+      <input id="phy3d-q" placeholder="filter sha / type / intent" size="22"/>
     </div>
   </div>
   <aside class="phy3d-side" id="phy3d-side"></aside>
@@ -228,6 +244,7 @@ _INNER = """
   }
   function colorOf(n){
     const m = document.getElementById("phy3d-color").value;
+    if (m === "type") return n.type_color || n.clade_color;
     if (m === "clade") return n.clade_color;
     if (m === "stage") return n.stage_color;
     if (m === "parsimony") return n.parsimony_change ? "#e07a9a" : "#3a4a5c";
@@ -239,7 +256,7 @@ _INNER = """
   function visible(n){
     const q = query();
     if (!q) return true;
-    return (n.sha+" "+n.subject+" "+n.intent+" "+(n.clade_label||"")).toLowerCase().indexOf(q) >= 0;
+    return (n.sha+" "+n.subject+" "+n.intent+" "+(n.type_key||"")+" "+(n.niche_label||"")+" "+(n.division||"")+" "+(n.clade_label||"")).toLowerCase().indexOf(q) >= 0;
   }
   function cx0(){
     let sx=0,sy=0,sz=0,n=DATA.nodes.length||1;
@@ -306,6 +323,7 @@ _INNER = """
     const an = DATA.analysis || {};
     if (!n) {
       const counts = Object.entries(meta.intent_counts||{}).map(function(kv){ return kv[0]+":"+kv[1]; }).join(" · ");
+      const types = Object.entries(meta.division_counts||{}).map(function(kv){ return kv[0]+":"+kv[1]; }).join(" · ");
       const gids = an.global_frame_ids || [];
       const gf = (DATA.frames||[]).filter(function(f){ return gids.indexOf(f.id)>=0; });
       side.innerHTML = "<h2>Analysis</h2><div class='kv'>"
@@ -313,7 +331,9 @@ _INNER = """
         +"<span>nodes</span><div>"+(meta.drawn||0)+" / "+(meta.node_count||0)+"</div>"
         +"<span>stage</span><div>"+esc(an.stage||meta.current_stage||"")+"</div>"
         +"<span>basin</span><div>"+esc(an.basin||"—")+"</div>"
-        +"<span>Fitch</span><div>steps "+((meta.parsimony||{}).steps)+" · CI "+((meta.parsimony||{}).ci)+" · RI "+((meta.parsimony||{}).ri)+"</div>"
+        +"<span>Fitch</span><div>steps "+((meta.parsimony||{}).steps)+" · CI "+((meta.parsimony||{}).ci)+" · RI "+((meta.parsimony||{}).ri)
+        +" · "+esc(an.parsimony_character||"type_path")+"</div>"
+        +"<span>types</span><div>"+esc(types||"—")+"</div>"
         +"<span>debt</span><div>"+esc(String(an.debt_score==null?"—":an.debt_score))+"</div>"
         +"<span>risk</span><div>"+esc(String(an.risk_count||0))+" failure points</div>"
         +"<span>intent</span><div>"+esc(counts)+"</div></div>"
@@ -327,8 +347,13 @@ _INNER = """
       +"<span>intent</span><div><i class='swatch' style='background:"+n.intent_color+"'></i>"
       +esc(n.intent)+" · "+esc(n.intent_stance)+" · conf "+n.intent_confidence
       +(n.intent_evidence&&n.intent_evidence.length? " · "+esc(n.intent_evidence.join(", ")):"")+"</div>"
+      +"<span>type</span><div><i class='swatch' style='background:"+(n.type_color||n.clade_color)+"'></i>"
+      +esc((n.type_path&&n.type_path.length?n.type_path.join("/"):(n.type_key||n.division||"—")))
+      +" · "+esc(n.division_source||"")+"</div>"
+      +"<span>niche</span><div>"+esc(n.niche_label||n.niche_id||"—")+"</div>"
       +"<span>clade</span><div>"+esc(n.clade_label||n.clade_id||"—")+"</div>"
       +"<span>reconstructed</span><div>"+esc(n.reconstructed||"—")+"</div>"
+      +"<span>depths</span><div>"+esc(Object.keys(n.reconstructed_depths||{}).sort().map(function(k){ return k+":"+(n.reconstructed_depths[k]||""); }).join(" · ")||"—")+"</div>"
       +"<span>stage</span><div>"+esc(n.stage||"—")+"</div>"
       +"<span>generation</span><div>"+n.generation+"</div>"
       +"<span>churn</span><div>"+n.churn+"</div>"

@@ -6,6 +6,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
+from codeevolve.viz.divisions import SemanticDivision, divisions_by_sha, fitch_by_depth, niche_lookup, path_type_lookup
 from codeevolve.viz.intent import classify_intent
 from codeevolve.viz.parsimony import ParsimonyResult, fitch_parsimony, spanning_tree
 
@@ -32,6 +33,13 @@ class VizCommit:
     debt: float = 0.0
     analysis_score: float = 0.0
     frame_ids: list[str] = field(default_factory=list)
+    type_path: list[str] = field(default_factory=list)
+    type_key: str = ""
+    niche_id: str = ""
+    niche_label: str = ""
+    division: str = ""
+    division_source: str = "insufficient"
+    reconstructed_depths: dict[int, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -54,6 +62,8 @@ class VizModel:
     frames: list[dict[str, Any]] = field(default_factory=list)
     analysis: dict[str, Any] = field(default_factory=dict)
     intent_counts: dict[str, int] = field(default_factory=dict)
+    division_counts: dict[str, int] = field(default_factory=dict)
+    depth_parsimony: dict[int, ParsimonyResult] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -69,6 +79,8 @@ class VizModel:
             "clades": list(self.clades),
             "gene_flow": list(self.gene_flow),
             "intent_counts": dict(self.intent_counts),
+            "division_counts": dict(self.division_counts),
+            "depth_parsimony": {str(k): v.to_dict() for k, v in self.depth_parsimony.items()},
             "analysis": dict(self.analysis),
             "frames": list(self.frames),
             "commits": [_commit_dict(c) for c in self.commits],
@@ -97,6 +109,13 @@ def _commit_dict(c: VizCommit) -> dict[str, Any]:
         "debt": c.debt,
         "analysis_score": c.analysis_score,
         "frame_ids": list(c.frame_ids),
+        "type_path": list(c.type_path),
+        "type_key": c.type_key,
+        "niche_id": c.niche_id,
+        "niche_label": c.niche_label,
+        "division": c.division,
+        "division_source": c.division_source,
+        "reconstructed_depths": {str(k): v for k, v in c.reconstructed_depths.items()},
     }
 
 
@@ -114,6 +133,19 @@ def report_to_dict(report: Any) -> dict[str, Any]:
     if tax is not None and getattr(tax, "allocations", None) is not None:
         data.setdefault("taxonomy", {})
         data["taxonomy"]["allocations"] = [a.to_dict() for a in tax.allocations]
+        kw = getattr(tax, "keyword_taxonomy", None)
+        if kw is not None and getattr(kw, "path_types", None) is not None:
+            kd = kw.to_dict()
+            kd["path_types"] = {p: h.to_dict() for p, h in kw.path_types.items()}
+            data["taxonomy"]["keyword_taxonomy"] = kd
+        sem = getattr(tax, "semantic", None)
+        if isinstance(sem, dict):
+            data["taxonomy"]["semantic"] = sem
+        elif sem is not None and hasattr(sem, "to_dict"):
+            full = sem.to_dict()
+            if getattr(sem, "path_to_niche", None) is not None:
+                full["path_to_niche"] = dict(sem.path_to_niche)
+            data["taxonomy"]["semantic"] = full
     gen = getattr(report, "genetics", None)
     if gen is not None and getattr(gen, "gene_flow", None) is not None:
         data.setdefault("genetics", {})
@@ -146,6 +178,23 @@ def build_model(report: Any) -> VizModel:
     risk_by_clade = _risk_by_clade(risk.get("failure_points") or [])
     debt_by_clade = _debt_by_clade(debt, tax)
     frames = [f for f in (prov.get("frames") or []) if isinstance(f, dict)][:40]
+    path_types = path_type_lookup(tax)
+    path_to_niche, niche_labels = niche_lookup(tax)
+    clade_types: dict[str, list[str]] = {}
+    for cl in tax.get("clades") or []:
+        if not isinstance(cl, dict) or not cl.get("id"):
+            continue
+        tp = [str(x) for x in (cl.get("type_path") or []) if x]
+        if not tp and cl.get("code_type"):
+            tp = [p for p in str(cl.get("code_type")).split("/") if p]
+        clade_types[str(cl["id"])] = tp
+    divs = divisions_by_sha(
+        tax.get("allocations") or [],
+        path_types=path_types,
+        path_to_niche=path_to_niche,
+        niche_labels=niche_labels,
+        clade_types=clade_types,
+    )
 
     commits: list[VizCommit] = []
     for n in raw_nodes:
@@ -157,6 +206,7 @@ def build_model(report: Any) -> VizModel:
         parents = list(n.get("parent_shas") or n.get("parents") or [])
         subject = str(n.get("subject") or "")
         hit = classify_intent(subject, n_parents=len(parents))
+        div = divs.get(sha)
         commits.append(
             VizCommit(
                 sha=sha,
@@ -176,6 +226,12 @@ def build_model(report: Any) -> VizModel:
                 debt=float(debt_by_clade.get(cid, 0.0)),
                 merge=len(parents) > 1,
                 frame_ids=_frame_ids_for(sha, cid, frames),
+                type_path=list(div.type_path) if div else list(clade_types.get(cid) or []),
+                type_key=(div.type_key if div else "/".join(clade_types.get(cid) or [])),
+                niche_id=div.niche_id if div else "",
+                niche_label=div.niche_label if div else "",
+                division=(div.key if div and div.key else cid),
+                division_source=div.source if div else ("clade" if cid else "insufficient"),
             )
         )
 
@@ -187,13 +243,35 @@ def build_model(report: Any) -> VizModel:
     if not roots:
         roots = tree_roots
 
-    leaf_state = {c.sha: c.clade_id for c in commits if c.clade_id}
-    par = fitch_parsimony(tree_children, roots, leaf_state, character="clade")
+    leaf_state = {c.sha: (c.division or c.clade_id) for c in commits if (c.division or c.clade_id)}
+    character = "type_path" if any(c.type_key for c in commits) else "clade"
+    par = fitch_parsimony(tree_children, roots, leaf_state, character=character)
+    depth_par = fitch_by_depth(
+        tree_children,
+        roots,
+        {
+            c.sha: SemanticDivision(
+                type_path=list(c.type_path),
+                type_key=c.type_key,
+                key=c.division,
+                source=c.division_source,
+            )
+            for c in commits
+        },
+    )
     change_kids = {b for _, b in par.change_edges}
     max_churn = max((c.churn for c in commits), default=1) or 1
     intent_counts: Counter[str] = Counter()
+    division_counts: Counter[str] = Counter()
     for c in commits:
-        c.reconstructed = par.reconstructed.get(c.sha) or c.clade_id
+        c.reconstructed = par.reconstructed.get(c.sha) or c.division or c.clade_id
+        depths: dict[int, str] = {}
+        for d, r in depth_par.items():
+            if c.type_path:
+                depths[d] = "/".join(c.type_path[:d])
+            elif r.reconstructed.get(c.sha):
+                depths[d] = r.reconstructed[c.sha]
+        c.reconstructed_depths = depths
         c.parsimony_change = c.sha in change_kids
         c.analysis_score = round(
             min(
@@ -205,6 +283,8 @@ def build_model(report: Any) -> VizModel:
             4,
         )
         intent_counts[c.intent] += 1
+        if c.division:
+            division_counts[c.division] += 1
 
     kw = (tax.get("keyword_taxonomy") or {}) if isinstance(tax.get("keyword_taxonomy"), dict) else {}
     hierarchy = kw.get("hierarchy") if isinstance(kw, dict) else None
@@ -229,11 +309,15 @@ def build_model(report: Any) -> VizModel:
         "parsimony_steps": par.steps,
         "parsimony_ci": par.consistency_index,
         "parsimony_ri": par.retention_index,
+        "parsimony_character": par.character,
+        "division_counts": dict(division_counts),
+        "type_depths": {str(d): r.steps for d, r in depth_par.items()},
         "global_frame_ids": [f.get("id") for f in frames if str(f.get("id") or "") in {"frame:stage", "frame:basin", "frame:selection", "frame:delta:report"} or str(f.get("id") or "").startswith("frame:delta")],
         "note": (
-            "Intent is classified from the commit subject (conventional prefix or keywords). "
-            "Stance insufficient means the subject is silent — not a motive. "
-            "Analysis scores mix clade risk, debt, and allocation churn. "
+            "Phylogeny divisions are semantic taxa: keyword type_path (domain/family/kind/specialty) "
+            "from allocated paths, plus semantic niche when present. Fitch reconstructs each ontology "
+            "depth on the first-parent tree. Intent is classified from the commit subject. "
+            "Stance insufficient means the subject or type record is silent — not a motive. "
             "Frames are report provenance (claim→evidence→falsifier)."
         ),
     }
@@ -257,6 +341,8 @@ def build_model(report: Any) -> VizModel:
         frames=frames,
         analysis=analysis,
         intent_counts=dict(intent_counts),
+        division_counts=dict(division_counts),
+        depth_parsimony=depth_par,
     )
 
 

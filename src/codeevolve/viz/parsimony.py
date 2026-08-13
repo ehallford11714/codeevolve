@@ -1,8 +1,9 @@
-"""Fitch parsimony on a spanning tree (unordered clade characters).
+"""Fitch parsimony on a spanning tree (unordered characters).
 
-Character = dominant clade of each commit. Tips drive the Fitch down-pass;
-when internals are also coded, tree length is the count of first-parent
-edges whose observed states differ.
+Default phylogeny character is the commit's semantic type_path (keyword
+ontology), falling back to dominant clade when types are silent. Tips drive
+the Fitch down-pass; when internals are also coded, tree length is the count
+of first-parent edges whose observed states differ.
 
 Consistency index CI = m / s  (m = n_states − 1, s = observed steps).
 Retention index RI = (g − s) / (g − m)  (g = n_coded − f_max).
