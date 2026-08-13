@@ -118,7 +118,12 @@ class AgentMemory:
         if len(self._items) <= self.max_items:
             return
         ordered = sorted(self._items.values(), key=lambda x: (x.score, x.created_at))
-        for item in ordered[: max(0, len(self._items) - self.max_items)]:
+        for item in ordered:
+            if len(self._items) <= self.max_items:
+                break
+            tags = set(item.tags or [])
+            if tags & {"overridden", "falsified", "reflexion"}:
+                continue
             self._items.pop(item.id, None)
 
     def get(self, item_id: str) -> MemoryItem | None:
@@ -162,7 +167,9 @@ class AgentMemory:
         path: str | None = None,
         kinds: list[MemoryKind] | None = None,
     ) -> list[MemoryItem]:
-        """Embedded retrieval over episodic/semantic/working notes (hash/MiniLM)."""
+        """Park-style recency × relevance × importance over episodic/semantic/working notes."""
+        import math
+
         q = (query or "").strip()
         if not q:
             return self.list(limit=limit)
@@ -171,15 +178,11 @@ class AgentMemory:
         except Exception:  # noqa: BLE001
             return self.search(q, limit=limit)
 
+        now = time.time()
         scored: list[tuple[float, MemoryItem]] = []
         for item in self._items.values():
             if kinds and item.kind not in kinds:
                 continue
-            if path and path not in item.content and path not in " ".join(item.tags):
-                # soft filter — still allow high semantic matches later via score
-                path_bonus = 0.0
-            else:
-                path_bonus = 0.05 if path else 0.0
             vec = item.vector
             if vec is None:
                 try:
@@ -187,7 +190,17 @@ class AgentMemory:
                     item.vector = vec
                 except Exception:  # noqa: BLE001
                     continue
-            sim = cosine(qv, vec) + path_bonus + item.score * 0.01
+            relevance = max(0.0, cosine(qv, vec))
+            hours = max(0.0, (now - float(item.created_at or now)) / 3600.0)
+            recency = math.exp(-hours / 24.0)
+            importance = max(0.01, float(item.score or 0.0))
+            graph_boost = 1.0
+            tags = set(item.tags or [])
+            if tags & {"graph", "overridden", "reflexion", "coalition", "sense"} or item.meta.get("graph_ids"):
+                graph_boost = 1.25
+            if path and (path in item.content or path in " ".join(item.tags)):
+                graph_boost *= 1.05
+            sim = recency * relevance * importance * graph_boost
             scored.append((sim, item))
         scored.sort(key=lambda x: -x[0])
         return [i for _, i in scored[:limit]]

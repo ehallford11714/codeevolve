@@ -8,8 +8,8 @@ objective
    → git worktree/branch session (on --apply)
    → analyze (CodeEvolve) + optional baseline tests (+ coverage when available)
    → seed steps from frame:basin / path frames (+ refactor plan)
-   → cognition: embedded memory · RAG · morphemes · reflect · tools · compact
-   → optional kernel subagents (path locks / merge / --parallel-subagents)
+   → cognition: graph_search sense → attention_rank → coalition (~12) → reflect → gated propose → compact
+   → optional kernel subagents (typed impasse → kernel; path-tie uses precedent, not spawn)
    → propose via structured JSON tool-calling (apply_patch) or heuristic
    → blast-radius preview (widen fence or refuse)
    → HITL (--approve) → patch engine (AST/CST symbol fence, fail-closed hunks)
@@ -23,12 +23,14 @@ objective
 
 | Layer | Role |
 |-------|------|
-| **Memory** | Working / episodic / semantic + **embedded `retrieve`** (persisted under `.codeevolve/agent/memory.json`) |
+| **Memory** | Working / episodic / semantic + **Park-style retrieve** (recency × relevance × importance; graph-linked boost) |
 | **RAG** | Semantic code chunks via `taxonomy.rag` (default **in-memory** vector store) |
 | **Morphemes** | Identifier/path morphology mapped onto the CodeEvolve keyword ontology |
+| **Sense** | **`graph_search` before reflect** (precedent + previous-report delta; `traverse=rw` on continue, `pivot` on spawn) |
+| **Coalition** | ~12-node broadcast (`attention_rank` + `steiner_join` / knowledge slice / `at_pivot("propose")`) into **reflect** and `propose_action` (heuristic + LLM) |
 | **Reflection** | Stance: `continue` \| `pivot` \| `stop` \| `spawn` |
-| **Action** | Plans tool calls from reflection |
-| **Tools** | `file_read`, `file_list`, `grep`, `rag_query`, `morpheme_scan`, `memory_*`, `provenance_hint`, `graph_search`, `web_search`, optional `shell` |
+| **Action** | Plans remaining tools after sense; dual-process gate (heuristic unless empty coalition / typed impasse / overridden) |
+| **Tools** | `file_read`, `file_list`, `grep`, `rag_query`, `morpheme_scan`, `memory_*`, `provenance_hint`, **`graph_search` (registered sense organ, every cognition cycle)**, `web_search`, optional `shell` |
 | **Tool-calling** | Structured JSON schemas (`apply_patch`, `done`, …) preferred over free-form |
 | **Frame seed** | Prefer `frame:basin` / `frame:delta` paths over cold refactor waves |
 | **Session delta** | `session.json` + previous report → `frame:delta:report` memory across runs |
@@ -38,8 +40,12 @@ objective
 | **Tests / CI** | Auto-detect runners; `pass_tests` / `pass_tests+cov`; coverage + CI gates |
 | **PR pack** | `pr_pack.md` with frames, falsifiers, scores (`gh pr comment --body-file`) |
 | **Budget / HITL** | Wall/cost/token/round caps; `--approve` before write |
-| **Compaction** | Compresses traces into durable summaries |
+| **Compaction** | Compresses traces; **does not drop `overridden` / reflexion notes** |
 | **Kernel subagents** | Spawned under atomic kernel objectives with path locks |
+
+`graph_search` is a **registered sense organ** on the default tool registry. Each cognition cycle calls it **before reflect** (`precedent=true`, previous-report `delta` when present; `traverse=rw` on continue, `pivot` on spawn). Hits (ids / family / pivot / flow.summary) go into working memory — not `tool:ok`. Empty graphs fail closed (`insufficient`).
+
+The round is a **gated working-memory bus**: sense → attention_rank → coalition (~12 nodes) → reflect/propose → write-back. Reflection and LLM propose both see coalition `frame_ids`, decisions, falsifiers, `allowed_because`/`overridden`. Write-back closes `valid_to` on prior decisions for the same path/frame; precedent ignores expired windows. Repeated agent-trace `(path, frame_ids, outcome)` compiles a fence/blast preference (never from silent git history; needs 2+ traces). Rollback writes an episodic note plus a `reflection` node linked `overridden` / `falsified_by` on the live graph (next sense sees it without re-parse) and jsonl. Kernel subagents run the same sense-first bus (`graph_search` before reflect, no duplicate search). Typed impasses map `insufficient→investigate`, verify-fail→`stabilize`, accepted-without-gain→`contain`, blast/fence refuse→`stabilize_path`; a path tie uses `precedent_search` instead of spawning. Not a GWT/LIDA/Soar port; no Kumar P@5/MTT claims.
 
 ```powershell
 python -m codeevolve agent --list-providers

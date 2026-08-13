@@ -65,7 +65,9 @@ Defaults: `.codeevolve/report.json` and/or `.codeevolve/agent` when present.
 
 ## Agent tool
 
-`graph_search` (`query`, `flow`, `kernel`, `family`, `pivot`, `traverse`, `precedent`, `depth`) is on the default registry and on the `investigate` / `search` kernels. Use it at coding pivots to pull taxon + knowledge + prior decisions before proposing.
+`graph_search` is a **registered sense organ** on the default tool registry (`query`, `flow`, `kernel`, `family`, `pivot`, `traverse`, `precedent`, `surface`, `previous`/`delta`, `limit`, `depth`). The coding agent calls it **before reflect** every cognition cycle (`precedent=true`; previous-report delta when a session report exists; `traverse=rw` on continue, `pivot` on spawn). Hits are ingested as working-memory findings (ids / family / pivot / flow), not `tool:ok`.
+
+**Bus:** sense → attention_rank (path + cited frames + last decision, 2–3 hops, `valid_from` decay, per-family cap) → coalition (~12 nodes via `steiner_join` / `family_slice` / `at_pivot("propose")`) → gated propose → write-back with closed `valid_to` windows and agent-trace chunks. Precedent skips expired windows. Rollback attaches in-memory `reflection` nodes (`overridden` / `falsified_by`) so the next sense sees them without waiting for re-parse, plus jsonl write-back. Empty graphs fail closed; silent records stay `insufficient`. Not GraphRAG / Neo4j / Kumar P@5.
 
 ## Python
 
@@ -74,6 +76,7 @@ from codeevolve.graph import (
     parse_context, query_context, search_graph, agentic_flow,
     family_slice, pivot_join, at_pivot, precedent_search,
     delta_detect, write_pivot, bfs_expand, shortest_path, wavefront,
+    attention_rank, coalition_pack,
 )
 
 g = parse_context(report=report, agent=run.to_dict(), agent_dir=".codeevolve/agent")

@@ -158,8 +158,9 @@ def build_default_registry(
     reg.register(
         ToolSpec(
             "graph_search",
-            "Parse/search the context graph (families, pivots, agentic flow, precedent).",
-            lambda query="", flow=False, kernel=None, limit=12, family=None, pivot=None, traverse="wave", precedent=False, depth=2: ce_tools.graph_search(
+            "Registered sense tool (every cognition cycle): search the context graph "
+            "(families, pivots, agentic flow, precedent, delta surface).",
+            lambda query="", flow=False, kernel=None, limit=12, family=None, pivot=None, traverse="wave", precedent=False, depth=2, surface=False, previous=None, delta=False: ce_tools.graph_search(
                 root,
                 query=query,
                 flow=bool(flow),
@@ -170,16 +171,22 @@ def build_default_registry(
                 traverse=str(traverse or "wave"),
                 precedent=precedent,
                 depth=int(depth or 2),
+                surface=bool(surface),
+                previous=previous,
+                delta=bool(delta),
             ),
             {
                 "query": "string",
                 "flow": "boolean",
                 "kernel": "string",
-                "limit": "integer",
                 "family": "string",
                 "pivot": "string",
                 "traverse": "string",
-                "precedent": "boolean",
+                "precedent": "boolean|string",
+                "surface": "boolean",
+                "previous": "string",
+                "delta": "boolean",
+                "limit": "integer",
                 "depth": "integer",
             },
         )

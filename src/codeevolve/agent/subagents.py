@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from codeevolve.agent.action import execute_plan, plan_from_reflection
+from codeevolve.agent.action import ActionPlan, execute_plan, graph_search_action, plan_from_reflection
 from codeevolve.agent.compaction import compact_texts
 from codeevolve.agent.kernel import KernelObjective, make_kernel
 from codeevolve.agent.memory import AgentMemory
@@ -17,6 +17,39 @@ from codeevolve.agent.morpheme import morphemes_from_repo
 from codeevolve.agent.rag_context import AgentRag
 from codeevolve.agent.reflection import reflect
 from codeevolve.agent.tools.registry import ToolRegistry, build_default_registry
+
+
+def findings_from_tool_output(name: str, out: Any) -> str | None:
+    """Turn a successful tool output into a short finding line. Fail closed."""
+    if name == "grep" and isinstance(out, list):
+        return f"grep:{len(out)} hits"
+    if name == "web_search" and isinstance(out, list):
+        return f"web:{len(out)} results"
+    if name == "rag_query" and isinstance(out, list):
+        return f"rag:{len(out)} chunks"
+    if name == "morpheme_scan" and isinstance(out, dict):
+        return str(out.get("summary") or "morphemes")
+    if name == "provenance_hint" and isinstance(out, dict):
+        return f"frames:{len(out.get('frames') or [])}"
+    if name == "file_read" and isinstance(out, str):
+        return f"read:{len(out)} chars"
+    if name == "graph_search" and isinstance(out, dict):
+        hits = [h for h in (out.get("hits") or []) if isinstance(h, dict)]
+        labels = [str(h.get("id") or h.get("label") or "") for h in hits[:6]]
+        labels = [x for x in labels if x]
+        flow = out.get("flow") if isinstance(out.get("flow"), dict) else {}
+        flow_sum = str(flow.get("summary") or "")
+        prec = [p for p in (out.get("precedent") or []) if isinstance(p, dict)]
+        prec_ids = [str(p.get("id") or "") for p in prec[:4] if p.get("id")]
+        bits = [f"graph:{len(hits)} hits"]
+        if labels:
+            bits.append("[" + ",".join(labels) + "]")
+        if flow_sum:
+            bits.append(f"flow={flow_sum[:80]}")
+        if prec_ids:
+            bits.append("precedent=" + ",".join(prec_ids))
+        return " ".join(bits)
+    return None
 
 
 @dataclass
@@ -28,6 +61,8 @@ class SubAgentResult:
     actions: dict[str, Any] = field(default_factory=dict)
     findings: list[str] = field(default_factory=list)
     tool_outputs: list[dict[str, Any]] = field(default_factory=list)
+    sense: dict[str, Any] = field(default_factory=dict)
+    coalition: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -38,6 +73,8 @@ class SubAgentResult:
             "actions": self.actions,
             "findings": list(self.findings),
             "tool_outputs": list(self.tool_outputs)[:20],
+            "sense": dict(self.sense),
+            "coalition": dict(self.coalition),
         }
 
 
@@ -54,6 +91,7 @@ class SubAgent:
         tools: ToolRegistry | None = None,
         allow_web: bool = True,
         llm: str | bool | None = "heuristic",
+        previous_report: Path | str | None = None,
     ) -> None:
         self.repo = Path(repo)
         self.kernel = kernel
@@ -61,6 +99,7 @@ class SubAgent:
         self.rag = rag or AgentRag(self.repo, backend="memory")
         self.allow_web = allow_web
         self.llm = llm
+        self.previous_report = previous_report
         self.tools = tools or build_default_registry(
             self.repo,
             allow_web=allow_web and "web_search" in kernel.tools,
@@ -71,13 +110,20 @@ class SubAgent:
         self.id = uuid.uuid4().hex[:10]
 
     def run(self) -> SubAgentResult:
+        from codeevolve.graph.control import (
+            attention_rank,
+            coalition_pack,
+            sense_graph_crossings,
+            sense_note_from_output,
+        )
+        from codeevolve.graph.parse import parse_context
+
         self.memory.add(
             f"subagent:{self.kernel.name} start — {self.kernel.description}",
             kind="episodic",
             tags=["subagent", self.kernel.name],
             meta={"kernel": self.kernel.to_dict()},
         )
-        # Seed RAG / morphemes
         query = self.kernel.objective.description or self.kernel.name
         if self.kernel.path:
             query = f"{query} {self.kernel.path}"
@@ -93,34 +139,105 @@ class SubAgent:
             tags=["rag", "morpheme", self.kernel.name],
         )
 
+        crossings: list[str] = []
+        current_report: dict[str, Any] | None = None
+        report_path = self.repo / ".codeevolve" / "report.json"
+        if report_path.is_file():
+            try:
+                loaded = json.loads(report_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    current_report = loaded
+            except (OSError, json.JSONDecodeError):
+                current_report = None
+        prev = self.previous_report
+        if prev:
+            crossings = sense_graph_crossings(current_report, prev, memory=self.memory)
+
+        obj_dict = self.kernel.objective.to_dict()
+        sense_refl = {
+            "stance": "continue",
+            "next_focus": self.kernel.path or self.kernel.name,
+            "insights": crossings[:3],
+            "spawn_kernels": [self.kernel.name],
+        }
+        sense_plan = ActionPlan(actions=[graph_search_action(sense_refl, obj_dict, previous=prev)])
+        sense_out = execute_plan(sense_plan, self.tools, max_actions=1)
+        sense_res = (sense_out.results[0].get("result") or {}) if sense_out.results else {}
+        sense_payload = sense_res.get("output") if isinstance(sense_res.get("output"), dict) else {}
+        graph_finding = findings_from_tool_output("graph_search", sense_payload) if sense_res.get("ok") else None
+        if not graph_finding:
+            graph_finding = sense_note_from_output(sense_payload if sense_payload else None)
+        hit_ids = [str(h.get("id") or "") for h in (sense_payload.get("hits") or []) if isinstance(h, dict)]
+        self.memory.add(
+            graph_finding,
+            kind="working",
+            tags=["graph", "sense", "graph_search", self.kernel.name],
+            score=1.4,
+            meta={"graph_ids": [x for x in hit_ids if x], "ok": bool(sense_res.get("ok"))},
+        )
+
+        coalition: dict[str, Any] = {
+            "node_ids": [],
+            "insufficient": True,
+            "stance": "insufficient",
+            "count": 0,
+        }
+        cited = [str(h.get("id") or "") for h in (sense_payload.get("hits") or []) if isinstance(h, dict) and str(h.get("id") or "").startswith("frame:")]
+        attention_rows: list[dict[str, Any]] = []
+        try:
+            agent_dir = self.repo / ".codeevolve" / "agent"
+            g = parse_context(
+                agent_dir=agent_dir if agent_dir.is_dir() else None,
+                report=current_report,
+            )
+            attention_rows = attention_rank(
+                g,
+                path=self.kernel.path,
+                frame_ids=cited,
+                hops=3,
+                per_family=4,
+                limit=12,
+            )
+            sense_hits = list(sense_payload.get("hits") or [])
+            sense_hits.extend({"id": r.get("id"), "kind": r.get("kind")} for r in attention_rows)
+            coalition = coalition_pack(
+                g,
+                hits=sense_hits,
+                path=self.kernel.path,
+                frame_ids=cited,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
         reflection = reflect(
-            objective=self.kernel.objective.to_dict(),
+            objective=obj_dict,
             round_result=None,
             memory=self.memory,
             rag_hits=[h.to_dict() for h in hits],
             morphemes=morph.get("morphemes"),
             llm=self.llm if self.llm not in {None, True} else "heuristic",
+            coalition=coalition,
         )
         plan = plan_from_reflection(
             reflection.to_dict(),
-            objective=self.kernel.objective.to_dict(),
+            objective=obj_dict,
             enable_web=self.allow_web and "web_search" in self.kernel.tools,
+            previous=prev,
         )
-        # Filter plan tools to kernel allow-list (+ always memory/rag if present)
-        allowed = set(self.kernel.tools) | {"memory_add", "memory_search", "rag_query"}
-        plan.actions = [
-            a
-            for a in plan.actions
-            if a.kind != "tool" or a.name in allowed or a.name in self.tools.names()
-        ]
-        # Drop disallowed tools
+        allowed = set(self.kernel.tools) | {"memory_add", "memory_search", "rag_query", "graph_search"}
         plan.actions = [
             a
             for a in plan.actions
             if a.kind != "tool" or a.name in allowed
         ]
+        plan.actions = [
+            a
+            for a in plan.actions
+            if not (a.kind == "tool" and a.name == "graph_search")
+        ]
 
-        outcome = execute_plan(plan, self.tools, max_actions=max(4, self.kernel.budget_rounds * 4))
+        outcome = execute_plan(plan, self.tools, max_actions=max(8, self.kernel.budget_rounds * 4))
+        outcome.results = list(sense_out.results) + list(outcome.results)
         findings: list[str] = []
         tool_outputs: list[dict[str, Any]] = []
         for row in outcome.results:
@@ -128,20 +245,10 @@ class SubAgent:
             res = row.get("result") or {}
             if not res.get("ok"):
                 continue
-            out = res.get("output")
-            name = res.get("name") or ""
-            if name == "grep" and isinstance(out, list):
-                findings.append(f"grep:{len(out)} hits")
-            elif name == "web_search" and isinstance(out, list):
-                findings.append(f"web:{len(out)} results")
-            elif name == "rag_query" and isinstance(out, list):
-                findings.append(f"rag:{len(out)} chunks")
-            elif name == "morpheme_scan" and isinstance(out, dict):
-                findings.append(str(out.get("summary") or "morphemes"))
-            elif name == "provenance_hint" and isinstance(out, dict):
-                findings.append(f"frames:{len(out.get('frames') or [])}")
-            elif name == "file_read" and isinstance(out, str):
-                findings.append(f"read:{len(out)} chars")
+            name = str(res.get("name") or "")
+            found = findings_from_tool_output(name, res.get("output"))
+            if found:
+                findings.append(found)
 
         compact = compact_texts(findings + reflection.insights, max_bullets=10)
         self.memory.add(
@@ -152,6 +259,15 @@ class SubAgent:
         )
         self.memory.save()
         status = "ok" if findings or reflection.insights else "empty"
+        sense = {
+            "tool": "graph_search",
+            "finding": graph_finding,
+            "ok": bool(sense_res.get("ok")),
+            "hit_ids": [x for x in hit_ids if x],
+            "crossings": crossings[:8],
+            "attention_ids": [str(r.get("id") or "") for r in attention_rows if r.get("id")],
+            "order": ["graph_search", "crossings", "attention_rank", "coalition", "reflect"],
+        }
         return SubAgentResult(
             id=self.id,
             kernel=self.kernel.to_dict(),
@@ -160,6 +276,8 @@ class SubAgent:
             actions=outcome.to_dict(),
             findings=findings,
             tool_outputs=tool_outputs,
+            sense=sense,
+            coalition=coalition,
         )
 
 
@@ -175,6 +293,7 @@ def spawn_subagents(
     llm: str | bool | None = "heuristic",
     work_dir: Path | str | None = None,
     parallel: bool = False,
+    previous_report: Path | str | None = None,
 ) -> list[SubAgentResult]:
     """Spawn up to ``max_agents`` subagents for the given kernels (path-locked)."""
     from codeevolve.agent.coord import run_subagents_coordinated, write_merge_report
@@ -201,6 +320,7 @@ def spawn_subagents(
             rag=agent_rag,
             allow_web=allow_web,
             llm=llm,
+            previous_report=previous_report,
         )
 
     results, merged = run_subagents_coordinated(

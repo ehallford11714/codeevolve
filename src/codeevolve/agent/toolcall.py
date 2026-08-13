@@ -45,6 +45,23 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "parameters": {"path": "string?"},
     },
     {
+        "name": "graph_search",
+        "description": "Registered sense tool: search the context graph (families, pivots, flow, precedent)",
+        "parameters": {
+            "query": "string",
+            "flow": "boolean?",
+            "kernel": "string?",
+            "family": "string?",
+            "pivot": "string?",
+            "traverse": "string?",
+            "precedent": "boolean|string?",
+            "surface": "boolean?",
+            "previous": "string?",
+            "delta": "boolean?",
+            "limit": "integer?",
+        },
+    },
+    {
         "name": "web_search",
         "description": "Web search",
         "parameters": {"query": "string", "max_results": "integer?"},
@@ -242,7 +259,7 @@ def llm_tool_loop(
         "Respond with a JSON array of {\"name\", \"arguments\"} objects. "
         "Available tools:\n"
         + json.dumps(TOOL_SCHEMAS, indent=2)
-        + "\nPrefer grep/rag/file_read before apply_patch. "
+        + "\nPrefer graph_search (registered sense organ) then grep/rag/file_read before apply_patch. "
         "apply_patch should use unified diff hunks when possible. "
         "Finish with {\"name\":\"done\",\"arguments\":{\"summary\":\"...\"}}.\n"
         + system_extra

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal
 
 from codeevolve.agent.tools.registry import ToolRegistry, ToolResult
@@ -52,11 +53,63 @@ class ActionOutcome:
         return {"plan": self.plan.to_dict(), "results": list(self.results)}
 
 
+def _graph_search_query(reflection: dict[str, Any], objective: dict[str, Any]) -> str:
+    focus = str(reflection.get("next_focus") or objective.get("path") or objective.get("kind") or "")
+    insights = [str(x) for x in (reflection.get("insights") or [])[:3] if x]
+    kernels = [str(k) for k in (reflection.get("spawn_kernels") or [])[:3] if k]
+    path = str(objective.get("path") or "")
+    bits = [focus, *insights, *kernels]
+    if path and path not in bits:
+        bits.append(path)
+    return " ".join(b for b in bits if b).strip() or str(objective.get("kind") or "code")
+
+
+def graph_search_action(
+    reflection: dict[str, Any] | None,
+    objective: dict[str, Any],
+    *,
+    previous: str | Path | None = None,
+) -> Action:
+    """Always-on sense organ: registered graph_search over the context graph."""
+    from pathlib import Path as _Path
+
+    refl = reflection or {}
+    query = _graph_search_query(refl, objective)
+    stance = str(refl.get("stance") or "continue")
+    kernels = [str(k).lower() for k in (refl.get("spawn_kernels") or []) if k]
+    investigating = stance in {"spawn", "pivot"} or bool(set(kernels) & {"investigate", "search"})
+    kernel = next((k for k in (refl.get("spawn_kernels") or []) if str(k).lower() in {"investigate", "search"}), None)
+    pivot_implied = stance in {"pivot", "spawn"} or bool(kernels)
+    prev = str(previous) if previous else None
+    if prev and not _Path(prev).is_file():
+        prev = None
+    args: dict[str, Any] = {
+        "query": query,
+        "flow": investigating,
+        "traverse": "pivot" if pivot_implied else "rw",
+        "limit": 12,
+        "surface": True,
+        "precedent": True,
+        "delta": bool(prev),
+    }
+    if prev:
+        args["previous"] = prev
+    if kernel:
+        args["kernel"] = str(kernel)
+    return Action(
+        kind="tool",
+        name="graph_search",
+        args=args,
+        rationale="Sense organ: registered graph_search (precedent + delta + families/pivots/flow)",
+    )
+
+
 def plan_from_reflection(
     reflection: dict[str, Any],
     *,
     objective: dict[str, Any],
     enable_web: bool = True,
+    previous: str | Path | None = None,
 ) -> ActionPlan:
     """Heuristic action plan from a reflection blob."""
     actions: list[Action] = []
@@ -64,6 +117,7 @@ def plan_from_reflection(
     focus = reflection.get("next_focus") or objective.get("path") or objective.get("kind") or ""
     stance = reflection.get("stance") or "continue"
 
+    actions.append(graph_search_action(reflection, objective, previous=previous))
     actions.append(
         Action(
             kind="tool",

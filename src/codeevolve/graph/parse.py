@@ -431,6 +431,8 @@ def ingest_cognition(g: ContextGraph, cog: dict[str, Any], *, parent: str | None
             _ingest_rag_hits(g, res.get("output"), parent=tid)
         if name == "provenance_hint":
             _ingest_hint_frames(g, res.get("output"), parent=tid)
+        if name == "graph_search":
+            _ingest_graph_search(g, res.get("output"), parent=tid)
 
     for i, act in enumerate(plan[:12]):
         if not isinstance(act, dict):
@@ -586,6 +588,8 @@ def _ingest_subagent(g: ContextGraph, sub: dict[str, Any], *, parent: str | None
         g.add_node(tid, "tool", label=name, stage="act", text=_brief(res.get("output")), meta={"ok": res.get("ok")})
         g.add_edge(prev, tid, "invoked" if i == 0 else "next")
         prev = tid
+        if name == "graph_search":
+            _ingest_graph_search(g, res.get("output"), parent=tid)
 
 
 def _ingest_rag_hits(g: ContextGraph, output: Any, *, parent: str) -> None:
@@ -613,6 +617,65 @@ def _ingest_hint_frames(g: ContextGraph, output: Any, *, parent: str) -> None:
         nid = fid if fid.startswith("frame:") else _nid("frame", fid)
         g.add_node(nid, "frame", label=fid, stage="deliberate", text=str(fr.get("claim") or ""))
         g.add_edge(parent, nid, "cites")
+
+
+def _ingest_graph_search(g: ContextGraph, output: Any, *, parent: str) -> None:
+    """Ingest graph_search hits/flow/precedent. Silent/empty output is a no-op."""
+    if not isinstance(output, dict):
+        return
+    for h in (output.get("hits") or [])[:12]:
+        if not isinstance(h, dict):
+            continue
+        hid = str(h.get("id") or "")
+        if not hid:
+            continue
+        kind = str(h.get("kind") or "context")
+        g.add_node(
+            hid,
+            kind,
+            label=str(h.get("label") or hid),
+            stage=str(h.get("stage") or "sense"),
+            text=str(h.get("text") or "")[:240],
+            family=str(h.get("family") or ""),
+        )
+        g.add_edge(parent, hid, "retrieved")
+    flow = output.get("flow") if isinstance(output.get("flow"), dict) else None
+    if flow:
+        summary = str(flow.get("summary") or "")
+        if summary or flow.get("steps"):
+            fid = _nid("flow", parent)
+            g.add_node(
+                fid,
+                "context",
+                label="flow",
+                stage="sense",
+                family="flow",
+                text=summary[:240],
+            )
+            g.add_edge(parent, fid, "retrieved")
+        for step in (flow.get("steps") or [])[:8]:
+            if not isinstance(step, dict) or not step.get("id"):
+                continue
+            sid = str(step["id"])
+            g.add_node(
+                sid,
+                str(step.get("kind") or "tool"),
+                label=str(step.get("label") or sid),
+                stage=str(step.get("stage") or "act"),
+            )
+            g.add_edge(parent, sid, "retrieved")
+    for p in (output.get("precedent") or [])[:8]:
+        if not isinstance(p, dict) or not p.get("id"):
+            continue
+        pid = str(p["id"])
+        g.add_node(
+            pid,
+            str(p.get("kind") or "decision"),
+            label=str(p.get("label") or pid),
+            stage="deliberate",
+            text=str(p.get("text") or "")[:240],
+        )
+        g.add_edge(parent, pid, "cites")
 
 
 def _brief(value: Any) -> str:

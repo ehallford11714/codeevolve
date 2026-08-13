@@ -29,6 +29,48 @@ class Reflection:
         }
 
 
+def coalition_context(coalition: dict[str, Any] | None) -> dict[str, Any]:
+    """Compact ~12-node coalition for reflection / LLM payloads. Empty → insufficient."""
+    if not coalition:
+        return {"insufficient": True, "count": 0, "node_ids": []}
+    return {
+        "node_ids": list(coalition.get("node_ids") or [])[:12],
+        "frame_ids": list(coalition.get("frame_ids") or [])[:8],
+        "decision_ids": list(coalition.get("decision_ids") or [])[:8],
+        "falsifiers": list(coalition.get("falsifiers") or [])[:6],
+        "allowed_because": list(coalition.get("allowed_because") or [])[:8],
+        "overridden": list(coalition.get("overridden") or [])[:8],
+        "insufficient": bool(coalition.get("insufficient")),
+        "stance": str(coalition.get("stance") or ""),
+        "count": int(coalition.get("count") or 0),
+    }
+
+
+def _coalition_insights(coalition: dict[str, Any] | None) -> list[str]:
+    if not coalition:
+        return []
+    if coalition.get("insufficient") or not coalition.get("node_ids"):
+        return ["graph coalition: insufficient"]
+    bits = [f"coalition n={coalition.get('count') or len(coalition.get('node_ids') or [])}"]
+    frames = [str(x) for x in (coalition.get("frame_ids") or []) if x]
+    decisions = [str(x) for x in (coalition.get("decision_ids") or []) if x]
+    if frames:
+        bits.append("frames=" + ",".join(frames[:6]))
+    if decisions:
+        bits.append("decisions=" + ",".join(decisions[:4]))
+    rows = [" ".join(bits)]
+    fals = [str(x) for x in (coalition.get("falsifiers") or []) if x]
+    if fals:
+        rows.append("falsifier: " + "; ".join(fals[:2]))
+    allowed = [str(x) for x in (coalition.get("allowed_because") or []) if x]
+    overridden = [str(x) for x in (coalition.get("overridden") or []) if x]
+    if allowed or overridden:
+        rows.append(
+            "allowed_because=" + ",".join(allowed[:4]) + " overridden=" + ",".join(overridden[:4])
+        )
+    return rows
+
+
 def reflect_heuristic(
     *,
     objective: dict[str, Any],
@@ -36,19 +78,21 @@ def reflect_heuristic(
     memory_snapshot: str,
     rag_hits: list[dict[str, Any]] | None = None,
     morphemes: list[dict[str, Any]] | None = None,
+    coalition: dict[str, Any] | None = None,
 ) -> Reflection:
     insights: list[str] = []
     risks: list[str] = []
     spawn: list[str] = []
     stance = "continue"
     focus = objective.get("path") or objective.get("kind") or "follow_refactor"
+    insights.extend(_coalition_insights(coalition))
 
     if not round_result:
         insights.append("No prior round — gather RAG + morphemes before acting")
         spawn.append("investigate")
         return Reflection(
             stance="continue",
-            insights=insights,
+            insights=insights[:8],
             next_focus=str(focus),
             spawn_kernels=spawn,
         )
@@ -119,6 +163,7 @@ def reflect(
     api_key: str | None = None,
     repo: Any = None,
     memory_query: str | None = None,
+    coalition: dict[str, Any] | None = None,
 ) -> Reflection:
     q = memory_query or str(objective.get("kind") or objective.get("description") or "")
     path = objective.get("path") if isinstance(objective.get("path"), str) else None
@@ -126,12 +171,14 @@ def reflect(
         mem_snap = memory.retrieve_block(q, path=path, limit=8)
     except Exception:  # noqa: BLE001
         mem_snap = memory.working_snapshot()
+    coal = coalition_context(coalition)
     base = reflect_heuristic(
         objective=objective,
         round_result=round_result,
         memory_snapshot=mem_snap,
         rag_hits=rag_hits,
         morphemes=morphemes,
+        coalition=coal,
     )
     if not llm or llm in {False, "heuristic", "off"}:
         memory.add(
@@ -166,6 +213,7 @@ def reflect(
         "memory": mem_snap,
         "rag_hits": (rag_hits or [])[:4],
         "morphemes": (morphemes or [])[:8],
+        "coalition": coal,
     }
     import json
 

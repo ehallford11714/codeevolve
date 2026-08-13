@@ -35,6 +35,7 @@ from codeevolve.models.endpoints import recommend_agent_endpoint, resolve_endpoi
 from codeevolve.models.tiers import apply_tier_env
 from codeevolve.provenance.ledger import build_provenance_ledger
 from codeevolve.report.diff import diff_reports
+from codeevolve.graph.control import sense_graph_crossings, write_failure_reflection
 
 
 def _agent_env() -> None:
@@ -369,6 +370,15 @@ class EvolveAgent:
                     accepted=None,
                     frame_ids=["frame:delta:report"],
                 )
+            crossings = sense_graph_crossings(
+                baseline,
+                session_prev,
+                memory=self.runtime.memory if self.runtime is not None else None,
+            )
+            if crossings:
+                run.session["graph_crossings"] = crossings[:8]
+            if self.runtime is not None:
+                self.runtime.previous_report = session_prev
 
         pack = self._pack(baseline)
         steps = ranks_steps_with_frames(
@@ -413,6 +423,10 @@ class EvolveAgent:
                 break
             self.tracker.tick_round()
             notes: list[str] = []
+            for crossing in (run.session or {}).get("graph_crossings") or []:
+                notes.append(str(crossing))
+                if len(notes) >= 4:
+                    break
             step = next((s for s in steps if str(s.get("id")) not in attempted), None)
             if step is None:
                 notes.append("no remaining refactor steps")
@@ -451,13 +465,14 @@ class EvolveAgent:
 
             # Cognitive cycle: memory / RAG / morphemes / reflect / tools / compact / spawn
             cognition_state = None
+            prior = run.rounds[-1].to_dict() if run.rounds else None
             if self.runtime is not None:
                 try:
-                    prior = run.rounds[-1].to_dict() if run.rounds else None
                     cognition_state = self.runtime.run_cycle(
                         self.objective,
                         round_result=prior,
                         paths=fence or None,
+                        previous_report=session_prev,
                     )
                     notes.append(
                         f"cognition: reflect={cognition_state.reflection.get('stance')} "
@@ -484,6 +499,14 @@ class EvolveAgent:
                 )
             else:
                 tools = self.runtime.tools if self.runtime else None
+                coalition = None
+                impasse = None
+                if cognition_state is not None:
+                    coalition = cognition_state.coalition
+                    impasse = cognition_state.impasse
+                elif self.runtime is not None:
+                    coalition = self.runtime.last_coalition
+                    impasse = self.runtime.last_impasse
                 proposal = propose_action(
                     workspace,
                     step,
@@ -498,6 +521,9 @@ class EvolveAgent:
                     tools=tools,
                     budget=self.tracker,
                     structured_tools=True,
+                    coalition=coalition,
+                    impasse=impasse,
+                    last_round=prior,
                 )
 
             round_dir = self.work_dir / f"round_{i:02d}_{step_id}"
@@ -701,16 +727,28 @@ class EvolveAgent:
                 json.dumps(round_res.to_dict(), indent=2, default=str),
                 encoding="utf-8",
             )
+            rnd_dict = round_res.to_dict()
+            if cognition_state is not None:
+                rnd_dict["impasse"] = cognition_state.impasse
             try:
                 from codeevolve.graph.store import write_round_traces
 
                 write_round_traces(
-                    round_res.to_dict(),
+                    rnd_dict,
                     out_dir=self.work_dir,
                     report=current_report if isinstance(current_report, dict) else None,
                 )
             except OSError:
                 notes.append("context-graph write-back skipped")
+            try:
+                write_failure_reflection(
+                    self.runtime.live_graph if self.runtime is not None else None,
+                    rnd_dict,
+                    memory=self.runtime.memory if self.runtime is not None else None,
+                    out_dir=self.work_dir,
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
             if score_after and score_after.reached_target:
                 run.status = "target_reached"

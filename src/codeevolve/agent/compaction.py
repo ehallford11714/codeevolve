@@ -44,20 +44,35 @@ def compact_texts(texts: list[str], *, max_bullets: int = 12, max_chars: int = 2
     return CompactResult(summary=summary or "(nothing to compact)", bullets=bullets)
 
 
+def _protected(item: Any) -> bool:
+    tags = set(getattr(item, "tags", None) or [])
+    if tags & {"overridden", "falsified", "reflexion"}:
+        return True
+    meta = getattr(item, "meta", None) or {}
+    if str(meta.get("outcome") or "") == "overridden":
+        return True
+    content = str(getattr(item, "content", "") or "").lower()
+    if "overridden" in content and getattr(item, "kind", "") in {"episodic", "reflection", "working"}:
+        return True
+    return False
+
+
 def compact_memory(memory: AgentMemory, *, keep_working: int = 8) -> CompactResult:
     """Fold older working/tool memories into one semantic compact note."""
     working = memory.list(kind="working", limit=80)
     tools = memory.list(kind="tool", limit=80)
     episodic = memory.list(kind="episodic", limit=40)
     pool = working[keep_working:] + tools + episodic
+    pool = [i for i in pool if not _protected(i)]
     if not pool:
         snap = memory.working_snapshot(limit=keep_working)
-        return CompactResult(summary=snap, kept_ids=[i.id for i in working[:keep_working]])
+        kept = [i.id for i in working[:keep_working]] + [i.id for i in episodic if _protected(i)]
+        return CompactResult(summary=snap, kept_ids=kept)
 
     texts = [f"{i.kind}: {i.content}" for i in pool]
     result = compact_texts(texts)
     result.dropped = len(pool)
-    result.kept_ids = [i.id for i in working[:keep_working]]
+    result.kept_ids = [i.id for i in working[:keep_working]] + [i.id for i in episodic if _protected(i)]
     memory.add(
         result.summary,
         kind="compact",
@@ -71,7 +86,7 @@ def compact_memory(memory: AgentMemory, *, keep_working: int = 8) -> CompactResu
         tags=["compact_summary"],
         score=1.2,
     )
-    # demote compacted items
+    # demote compacted items (never overridden / reflexion)
     for item in pool:
         item.score *= 0.35
         item.tags = list(set(item.tags + ["compacted"]))

@@ -34,8 +34,12 @@ def precedent_search(
         return []
     scored: list[tuple[float, str]] = []
     seed_scores: dict[str, float] = {}
+    from codeevolve.graph.control import window_open
+
     for n in graph.nodes.values():
         if n.kind not in PRECEDENT_KINDS:
+            continue
+        if not window_open(n):
             continue
         blob = n.blob()
         hits = sum(1 for t in tokens if t in blob) if tokens else 0

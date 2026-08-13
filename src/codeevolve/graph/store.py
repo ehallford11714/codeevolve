@@ -103,8 +103,41 @@ def write_round_traces(
         "valid_from": ts,
         "rel": decision_rel(outcome),
         "ts": ts,
+        "impasse": rnd.get("impasse") if isinstance(rnd.get("impasse"), dict) else {},
     }
     written = [write_pivot(graph, decision, out_dir)]
+
+    try:
+        from codeevolve.graph.control import (
+            chunk_from_traces,
+            close_validity_windows,
+            ingest_chunks,
+            persist_closed_windows,
+        )
+        from codeevolve.graph.parse import parse_context
+
+        host = graph if graph is not None else parse_context(agent_dir=out_dir, report=report)
+        closed = close_validity_windows(
+            host,
+            paths=paths,
+            frame_ids=frames,
+            now=ts,
+            except_id=str(decision["id"]),
+        )
+        persist_closed_windows(out_dir, closed, now=ts)
+        store_rows = (load_graph_store(out_dir).get("decisions") or []) if out_dir else [decision]
+        prefs = chunk_from_traces(store_rows)
+        ingest_chunks(host, prefs)
+        for pref in prefs:
+            written.append(
+                write_pivot(
+                    host,
+                    {**pref, "kind": "pivot", "pivot_type": "preference", "label": pref.get("preference")},
+                    out_dir,
+                )
+            )
+    except Exception:  # noqa: BLE001 — fail closed
+        pass
 
     pivot_specs = [
         ("choose_path", "sense", focus or ",".join(paths[:3]), paths),
@@ -191,7 +224,12 @@ def _materialize_decision(g: ContextGraph, row: dict[str, Any]) -> None:
         authority=str(row.get("authority") or "authority:codeevolve"),
         valid_from=str(row.get("valid_from") or row.get("ts") or ""),
         valid_to=str(row.get("valid_to") or ""),
-        meta={"outcome": row.get("outcome"), "stance": row.get("stance"), "round": row.get("round")},
+        meta={
+            "outcome": row.get("outcome"),
+            "stance": row.get("stance"),
+            "round": row.get("round"),
+            "impasse": (row.get("impasse") or {}),
+        },
     )
     rel = str(row.get("rel") or decision_rel(str(row.get("outcome") or "")))
     for fid in row.get("frame_ids") or []:

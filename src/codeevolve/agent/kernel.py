@@ -25,25 +25,25 @@ KERNEL_CATALOG: dict[str, dict[str, Any]] = {
         "description": "Reduce revert/risk hotspots; prefer quarantine and tests",
         "objective": "raise_stability",
         "wave": "stabilize",
-        "tools": ["grep", "file_read", "rag_query", "provenance_hint", "morpheme_scan"],
+        "tools": ["grep", "file_read", "rag_query", "graph_search", "provenance_hint", "morpheme_scan"],
     },
     "contain": {
         "description": "Fence blast-radius paths; stop coupling growth",
         "objective": "reduce_risk",
         "wave": "contain",
-        "tools": ["grep", "file_list", "rag_query", "provenance_hint"],
+        "tools": ["grep", "file_list", "rag_query", "graph_search", "provenance_hint"],
     },
     "pay_down": {
         "description": "Address debt markers / deprecations",
         "objective": "reduce_debt",
         "wave": "pay_down",
-        "tools": ["grep", "file_read", "rag_query", "memory_add"],
+        "tools": ["grep", "file_read", "rag_query", "graph_search", "memory_add"],
     },
     "evolve": {
         "description": "Safe forward change after stabilize/contain",
         "objective": "follow_refactor",
         "wave": "evolve",
-        "tools": ["rag_query", "file_read", "morpheme_scan"],
+        "tools": ["rag_query", "graph_search", "file_read", "morpheme_scan"],
     },
     "investigate": {
         "description": "Read/grep/RAG until stance is no longer insufficient",
@@ -61,13 +61,13 @@ KERNEL_CATALOG: dict[str, dict[str, Any]] = {
         "description": "Close test gaps on fenced paths",
         "objective": "reduce_risk",
         "wave": "pay_down",
-        "tools": ["grep", "file_read", "file_list", "rag_query"],
+        "tools": ["grep", "file_read", "file_list", "rag_query", "graph_search"],
     },
     "document": {
         "description": "Write path-fence / debt notes from evidence",
         "objective": "follow_refactor",
         "wave": "contain",
-        "tools": ["file_read", "provenance_hint", "memory_add", "rag_query"],
+        "tools": ["file_read", "provenance_hint", "memory_add", "rag_query", "graph_search"],
     },
 }
 
@@ -135,12 +135,17 @@ def decompose_objective(
     *,
     reflection_kernels: list[str] | None = None,
     max_kernels: int = 4,
+    impasse: dict[str, Any] | None = None,
 ) -> list[KernelObjective]:
     """Turn a parent objective (+ optional reflection spawn list) into kernel objectives."""
     names: list[str] = []
+    if impasse and impasse.get("kernel"):
+        names.append(str(impasse["kernel"]))
     if reflection_kernels:
         names.extend(reflection_kernels)
     kind = objective.kind
+    if impasse and impasse.get("objective") == "stabilize_path":
+        kind = "stabilize_path"
     if kind == "reduce_debt":
         names.extend(["investigate", "pay_down", "test"])
     elif kind in {"reduce_risk", "stabilize_path"}:

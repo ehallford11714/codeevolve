@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from codeevolve.graph import parse_context, query_context, search_graph
 from codeevolve.provenance.schema import MCP_TOOLS, dispatch_mcp_tool
 
@@ -79,7 +81,14 @@ def _mini_run() -> dict:
                                     "output": [{"path": "a.py", "chunk_id": "c1", "text": "TODO remove"}],
                                 }
                             },
-                            {"result": {"ok": True, "name": "graph_search", "output": {"hits": []}}},
+                            {"result": {"ok": True, "name": "graph_search", "output": {
+                                "hits": [
+                                    {"id": "path:a.py", "kind": "path", "label": "a.py", "stage": "context", "text": "a.py"},
+                                    {"id": "frame:basin", "kind": "frame", "label": "frame:basin", "stage": "deliberate"},
+                                ],
+                                "flow": {"summary": "investigate kernel walk", "count": 2, "steps": []},
+                                "precedent": [{"id": "decision:sense-r0", "kind": "decision", "label": "prior"}],
+                            }}},
                         ],
                     },
                     "kernels": [{"name": "investigate", "description": "gather evidence"}],
@@ -241,4 +250,157 @@ def test_traversal_algorithms() -> None:
     ranks = spreading_rank(g, {bbb: 1.0}, iterations=3)
     assert ranks
     assert bbb in ranks or aaa in ranks
+    dfs_hits = search_graph(g, "feat", traverse="dfs", limit=30)
+    assert dfs_hits
+    assert any(h["id"] in {aaa, bbb} or "feat" in (h.get("text") or "").lower() for h in dfs_hits)
+    fam_hits = search_graph(g, "api", traverse="family", family="taxon", limit=30)
+    assert fam_hits
+
+
+def test_graph_search_ingest_and_loop_sense() -> None:
+    from codeevolve.agent.loop import sense_graph_crossings
+    from codeevolve.graph.model import ContextGraph
+
+    g = parse_context(report=_mini_report(), agent=_mini_run())
+    retrieved = [(e.source, e.target, e.rel) for e in g.edges if e.rel in {"retrieved", "cites"}]
+    assert any(t == "path:a.py" and r == "retrieved" for _s, t, r in retrieved)
+    assert any(t == "decision:sense-r0" and r == "cites" for _s, t, r in retrieved)
+    assert any(n.label == "flow" or "investigate kernel" in (n.text or "") for n in g.nodes.values())
+
+    empty = ContextGraph()
+    cog = {
+        "actions": {
+            "results": [
+                {
+                    "result": {
+                        "ok": True,
+                        "name": "graph_search",
+                        "output": {
+                            "hits": [{"id": "type:architecture/api", "kind": "type", "label": "architecture/api", "stage": "taxon"}],
+                            "flow": {"summary": "sense walk", "steps": [{"id": "kernel:investigate", "kind": "kernel", "label": "investigate", "stage": "deliberate"}]},
+                            "precedent": [{"id": "decision:prior", "kind": "decision", "label": "prior"}],
+                        },
+                    }
+                }
+            ]
+        }
+    }
+    from codeevolve.graph.parse import ingest_cognition
+
+    ingest_cognition(empty, cog, parent=None)
+    assert "type:architecture/api" in empty.nodes
+    assert "kernel:investigate" in empty.nodes
+    assert "decision:prior" in empty.nodes
+    tool_ids = [n.id for n in empty.by_kind("tool")]
+    assert tool_ids
+    assert any(e.source in tool_ids and e.target == "type:architecture/api" and e.rel == "retrieved" for e in empty.edges)
+    assert any(e.target == "decision:prior" and e.rel == "cites" for e in empty.edges)
+
+    prev = _mini_report()
+    cur = dict(prev)
+    prev["ecology"] = {"global_stage": "pioneer", "stage_rationale": "sparse"}
+    cur["ecology"] = {"global_stage": "growth", "stage_rationale": "churn"}
+    prev["debt"] = {"score": 0.1, "summary": "low"}
+    cur["debt"] = {"score": 0.4, "summary": "up"}
+    notes = sense_graph_crossings(cur, prev)
+    assert notes
+    assert any("stage_changed" in n or "debt_crossed" in n for n in notes)
+    assert sense_graph_crossings(cur, None) == []
+
+
+def test_coalition_windows_chunks_and_propose() -> None:
+    from codeevolve.agent.actor import heuristic_propose
+    from codeevolve.agent.workspace import Workspace
+    from codeevolve.graph.control import (
+        chunk_from_traces,
+        close_validity_windows,
+        coalition_pack,
+        window_open,
+    )
+    from codeevolve.graph.precedent import precedent_search
+
+    g = parse_context(report=_mini_report(), agent=_mini_run())
+    pack = coalition_pack(g, hits=[{"id": "path:a.py"}, {"id": "frame:basin"}], path="a.py", limit=12)
+    assert pack["count"] >= 1
+    assert pack.get("insufficient") is False
+    assert "frame:basin" in pack["frame_ids"] or "frame:basin" in pack["node_ids"]
+
+    g.add_node("decision:old", "decision", label="decision:applied", stage="deliberate", family="decision", text="a.py")
+    g.add_node("path:a.py", "path", label="a.py", stage="context")
+    g.add_edge("decision:old", "path:a.py", "focuses")
+    closed = close_validity_windows(g, paths=["a.py"], frame_ids=["frame:basin"], except_id="decision:r0")
+    assert "decision:old" in closed or any(n.valid_to for n in g.by_kind("decision") if n.id == "decision:old")
+    g.nodes["decision:old"].valid_to = "2020-01-01T00:00:00+00:00"
+    assert window_open(g.nodes["decision:old"]) is False
+    hits = precedent_search(g, "a.py basin")
+    assert all(h.get("id") != "decision:old" for h in hits)
+
+    prefs = chunk_from_traces(
+        [
+            {"paths": ["a.py"], "frame_ids": ["frame:basin"], "outcome": "overridden", "source": "agent.round"},
+            {"paths": ["a.py"], "frame_ids": ["frame:basin"], "outcome": "overridden", "source": "agent.round"},
+        ]
+    )
+    assert prefs
+    assert prefs[0]["preference"] == "refuse_blast"
+
+    from pathlib import Path as P
+
+    ws = Workspace(P("."), fence_paths=["a.py"])
+    prop = heuristic_propose(
+        ws,
+        {"id": "R1", "title": "t", "paths": ["a.py"], "actions": []},
+        coalition=pack,
+    )
+    assert "frame:basin" in prop.frame_ids or prop.coalition.get("frame_ids")
+    assert prop.coalition.get("count", 0) >= 1 or prop.coalition.get("node_ids")
+
+
+def test_attention_rank_seeds_coalition() -> None:
+    from codeevolve.graph.control import attention_rank, coalition_pack
+
+    g = parse_context(report=_mini_report(), agent=_mini_run())
+    g.add_node("path:a.py", "path", label="a.py", stage="context")
+    g.add_node("decision:last", "decision", label="decision:applied", stage="deliberate", family="decision")
+    g.add_edge("decision:last", "path:a.py", "focuses")
+    g.add_edge("path:a.py", "frame:basin", "cites")
+    ranked = attention_rank(g, path="a.py", frame_ids=["frame:basin"], last_decision="decision:last", hops=3)
+    assert ranked
+    assert all("attention" in row for row in ranked)
+    fams = [row.get("family") or row.get("kind") for row in ranked]
+    assert len(fams) >= 1
+    pack = coalition_pack(g, hits=[{"id": "path:a.py"}], path="a.py", last_decision="decision:last", frame_ids=["frame:basin"])
+    assert pack.get("attention")
+    attention_ids = {str(r.get("id")) for r in pack["attention"] if r.get("id")}
+    assert attention_ids & set(pack["node_ids"]) or pack["count"] >= 1
+
+
+def test_failure_reflection_attaches_live_graph(tmp_path: Path) -> None:
+    from codeevolve.graph.control import merge_live_reflections, write_failure_reflection
+    from codeevolve.graph.model import ContextGraph
+
+    g = ContextGraph(source="test")
+    g.add_node("frame:basin", "frame", label="basin", stage="deliberate", family="knowledge")
+    rid = write_failure_reflection(
+        g,
+        {
+            "index": 3,
+            "verify_ok": False,
+            "notes": ["verify/tests failed — rolled back"],
+            "proposal": {"frame_ids": ["frame:basin"]},
+        },
+        out_dir=tmp_path,
+    )
+    assert rid
+    assert rid in g.nodes
+    assert g.nodes[rid].kind == "reflection"
+    assert any(e.rel == "overridden" for e in g.edges)
+    assert any(e.rel == "falsified_by" for e in g.edges)
+    host = ContextGraph(source="next-sense")
+    n = merge_live_reflections(host, g)
+    assert n >= 1
+    assert rid in host.nodes
+    assert any(e.rel == "overridden" for e in host.edges)
+    jsonl = list((tmp_path / "graph").glob("*.jsonl")) or list(tmp_path.glob("*.jsonl"))
+    assert jsonl or (tmp_path / "graph" / "pivots.jsonl").is_file()
 

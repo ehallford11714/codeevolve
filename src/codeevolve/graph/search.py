@@ -9,6 +9,8 @@ from codeevolve.graph.model import ContextGraph, GraphNode
 from codeevolve.graph.traverse import (
     STAGE_ORDER,
     bfs_expand,
+    dfs_expand,
+    family_walk,
     flow_walk,
     pivot_expand,
     resolve_traverse,
@@ -84,6 +86,19 @@ def search_graph(
         for nid, sc in ranks.items():
             if nid in graph.nodes:
                 extra[nid] = {"id": nid, "score": sc, "hops": 0 if nid in token_scores else 1}
+    elif mode == "dfs" and seeds:
+        exp = dfs_expand(graph, seeds, depth=max(1, depth), kinds=allow, family=family, max_nodes=max(limit * 4, 40))
+        for row in exp["nodes"]:
+            extra[row["id"]] = row
+    elif mode == "family" and seeds:
+        fam = family or "taxon"
+        walk = family_walk(graph, seeds, fam, depth=max(1, depth), max_nodes=max(limit * 4, 40))
+        for row in walk.get("nodes") or []:
+            extra[row["id"]] = row
+        for row in walk.get("bridged") or []:
+            nid = str(row.get("id") or "")
+            if nid in graph.nodes:
+                extra[nid] = {**row, "hops": int(row.get("hops") or 1)}
 
     merged: dict[str, tuple[float, GraphNode, dict[str, Any]]] = {}
     for score, n in scored:

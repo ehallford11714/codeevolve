@@ -31,7 +31,13 @@ def ingest_round_traces(
         source="report.agent.round" if not rnd.get("cognition") else "agent.round",
         confidence=0.7 if stance and stance != "insufficient" else 0.4,
         authority=AUTHORITY_ID,
-        meta={"outcome": outcome, "stance": stance, "round": index, "accepted": rnd.get("accepted")},
+        meta={
+            "outcome": outcome,
+            "stance": stance,
+            "round": index,
+            "accepted": rnd.get("accepted"),
+            "impasse": rnd.get("impasse") if isinstance(rnd.get("impasse"), dict) else {},
+        },
     )
     g.add_edge(round_id, did, "proposed")
     rel = decision_rel(outcome)
@@ -122,6 +128,22 @@ def ingest_round_traces(
         specs.append(("spawn", "act", ",".join(str(k) for k in kernels)))
     if "rolled back" in notes or outcome == "overridden":
         specs.append(("rollback", "verify", "rollback"))
+        rid = node_id("reflect", "fail", index)
+        g.add_node(
+            rid,
+            "reflection",
+            label="reflect:overridden",
+            stage="deliberate",
+            family="decision",
+            text="; ".join(str(x) for x in (rnd.get("notes") or [])[:4])[:300],
+            source="agent.reflexion",
+            meta={"outcome": "overridden", "round": index},
+        )
+        g.add_edge(rid, did, "overridden")
+        for fid in frame_ids:
+            fn = fid if str(fid).startswith("frame:") else node_id("frame", fid)
+            if fn in g.nodes:
+                g.add_edge(rid, fn, "falsified_by")
     if cog.get("rag") or any(
         (r.get("result") or r).get("name") == "rag_query"
         for r in ((cog.get("actions") or {}).get("results") or [])

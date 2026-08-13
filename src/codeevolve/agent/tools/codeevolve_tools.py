@@ -55,6 +55,14 @@ def provenance_hint(root: Path, *, path: str | None = None) -> ToolResult:
     )
 
 
+def _load_json_dict(path: Path) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def graph_search(
     root: Path,
     *,
@@ -68,14 +76,24 @@ def graph_search(
     traverse: str = "wave",
     depth: int = 2,
     surface: bool = False,
+    previous: str | dict[str, Any] | None = None,
+    delta: bool = False,
 ) -> ToolResult:
     report = None
     report_path = root / ".codeevolve" / "report.json"
     if report_path.is_file():
-        try:
-            report = json.loads(report_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            return ToolResult(ok=False, name="graph_search", output=None, error=str(exc))
+        report = _load_json_dict(report_path)
+        if report is None:
+            return ToolResult(ok=False, name="graph_search", output=None, error="unreadable report.json")
+    prev_report: dict[str, Any] | None = None
+    if isinstance(previous, dict):
+        prev_report = previous
+    elif previous:
+        prev_path = Path(str(previous))
+        if not prev_path.is_file():
+            prev_path = root / str(previous)
+        if prev_path.is_file():
+            prev_report = _load_json_dict(prev_path)
     agent_dir = root / ".codeevolve" / "agent"
     from codeevolve.graph import query_context
 
@@ -89,6 +107,8 @@ def graph_search(
         pivot=pivot,
         precedent=precedent,
         surface=surface,
+        previous=prev_report,
+        delta=bool(delta) or prev_report is not None,
         traverse=traverse,
         depth=depth,
         limit=limit,

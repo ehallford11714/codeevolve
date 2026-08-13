@@ -31,6 +31,8 @@ class ActionProposal:
     backend: str = "heuristic"
     stance: str = "proceed"  # proceed | insufficient | defer
     endpoint: dict[str, Any] = field(default_factory=dict)
+    coalition: dict[str, Any] = field(default_factory=dict)
+    impasse: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -50,6 +52,8 @@ class ActionProposal:
             "backend": self.backend,
             "stance": self.stance,
             "endpoint": dict(self.endpoint),
+            "coalition": dict(self.coalition),
+            "impasse": dict(self.impasse),
         }
 
 
@@ -71,6 +75,27 @@ def _frame_bits(path_pack: dict[str, Any] | None, pack: dict[str, Any] | None) -
     return frames, falsifier, measure
 
 
+def _merge_coalition_frames(
+    frames: list[str],
+    falsifier: str,
+    coalition: dict[str, Any] | None,
+) -> tuple[list[str], str, list[str]]:
+    extra: list[str] = []
+    if coalition:
+        extra.extend(str(x) for x in (coalition.get("frame_ids") or []) if x)
+        extra.extend(str(x) for x in (coalition.get("decision_ids") or []) if x)
+        fals = [str(x) for x in (coalition.get("falsifiers") or []) if x]
+        if fals:
+            falsifier = fals[0]
+    merged = list(dict.fromkeys([*frames, *extra]))
+    evidence = list(dict.fromkeys(
+        list(coalition.get("allowed_because") or []) + list(coalition.get("overridden") or [])
+        if coalition
+        else []
+    ))
+    return merged, falsifier, evidence
+
+
 def _py_module_import_path(rel: str) -> str:
     p = rel.replace("\\", "/")
     if p.endswith(".py"):
@@ -84,6 +109,7 @@ def heuristic_propose(
     *,
     path_pack: dict[str, Any] | None = None,
     pack: dict[str, Any] | None = None,
+    coalition: dict[str, Any] | None = None,
 ) -> ActionProposal:
     paths = [str(p) for p in (step.get("paths") or []) if p]
     if not paths:
@@ -94,9 +120,12 @@ def heuristic_propose(
                 paths.append(m.group(1).replace("\\", "/"))
     kind = str(step.get("problem_kind") or "")
     frames, falsifier, measure = _frame_bits(path_pack, pack)
+    frames, falsifier, coal_ev = _merge_coalition_frames(frames, falsifier, coalition)
     edits: list[FileEdit] = []
     instructions = list(step.get("actions") or [])
     stance = "proceed"
+    if coalition and coalition.get("insufficient") and not frames:
+        instructions.append("graph coalition empty — stance insufficient if no path-pack frames")
 
     # Prefer first existing path under fence
     target = None
@@ -221,7 +250,7 @@ def heuristic_propose(
         title=str(step.get("title") or "improve"),
         paths=paths or [e.path for e in edits],
         frame_ids=frames,
-        evidence_refs=[str(x) for x in (step.get("evidence_refs") or [])],
+        evidence_refs=list(dict.fromkeys([str(x) for x in (step.get("evidence_refs") or [])] + coal_ev)),
         rationale=rationale,
         falsifier=falsifier,
         measure=measure,
@@ -229,6 +258,7 @@ def heuristic_propose(
         instructions=instructions,
         backend="heuristic",
         stance=stance,
+        coalition=dict(coalition or {}),
     )
 
 
@@ -247,9 +277,12 @@ def llm_propose(
     tools: ToolRegistry | None = None,
     budget: Any = None,
     structured_tools: bool = True,
+    coalition: dict[str, Any] | None = None,
+    impasse: dict[str, Any] | None = None,
 ) -> ActionProposal:
     """LLM proposal via structured tool calls (preferred) or FILE:/END FILE fallback."""
-    base = heuristic_propose(workspace, step, path_pack=path_pack, pack=pack)
+    base = heuristic_propose(workspace, step, path_pack=path_pack, pack=pack, coalition=coalition)
+    base.impasse = dict(impasse or {})
     backend = get_chat_backend(
         llm if llm is not None else "auto",
         model=model,
@@ -272,6 +305,17 @@ def llm_propose(
     paths = base.paths[:4] or list(workspace.fence_paths)[:4]
     files = {p: workspace.read_text(p, max_chars=8000) for p in paths if p}
     frames, falsifier, measure = _frame_bits(path_pack, pack)
+    frames, falsifier, coal_ev = _merge_coalition_frames(frames, falsifier, coalition)
+    coal_payload = {
+        "node_ids": (coalition or {}).get("node_ids") or [],
+        "frame_ids": (coalition or {}).get("frame_ids") or frames,
+        "decision_ids": (coalition or {}).get("decision_ids") or [],
+        "falsifiers": (coalition or {}).get("falsifiers") or ([falsifier] if falsifier else []),
+        "allowed_because": (coalition or {}).get("allowed_because") or [],
+        "overridden": (coalition or {}).get("overridden") or [],
+        "count": (coalition or {}).get("count") or 0,
+        "insufficient": bool((coalition or {}).get("insufficient")),
+    }
     label = f"{endpoint.provider}:{endpoint.model}"
     reg = tools or build_default_registry(workspace.root, allow_web=False, allow_shell=False)
 
@@ -292,6 +336,8 @@ def llm_propose(
                 "measure": measure,
                 "path_fence": workspace.fence_paths,
                 "files": files,
+                "coalition": coal_payload,
+                "impasse": dict(impasse or {}),
             },
             tools=reg,
             workspace=workspace,
@@ -316,7 +362,7 @@ def llm_propose(
                 title=base.title,
                 paths=[e.path for e in edits],
                 frame_ids=frames or base.frame_ids,
-                evidence_refs=base.evidence_refs,
+                evidence_refs=list(dict.fromkeys(list(base.evidence_refs) + coal_ev)),
                 rationale=f"Structured tool-loop ({label}): {out.get('summary') or 'apply_patch'}",
                 falsifier=falsifier,
                 measure=measure,
@@ -326,6 +372,8 @@ def llm_propose(
                 backend=f"{backend.name}+tools",
                 stance="proceed",
                 endpoint=ep_dict,
+                coalition=dict(coalition or {}),
+                impasse=dict(impasse or {}),
             )
 
     # Fallback: free-form FILE/END FILE or unified diff text
@@ -344,6 +392,8 @@ def llm_propose(
         "falsifier": falsifier,
         "path_fence": workspace.fence_paths,
         "files": files,
+        "coalition": coal_payload,
+        "impasse": dict(impasse or {}),
     }
     text = backend.complete(system, json.dumps(payload, default=str), max_tokens=4096)
     if budget is not None:
@@ -373,7 +423,7 @@ def llm_propose(
         title=base.title,
         paths=[e.path for e in edits],
         frame_ids=frames or base.frame_ids,
-        evidence_refs=base.evidence_refs,
+        evidence_refs=list(dict.fromkeys(list(base.evidence_refs) + coal_ev)),
         rationale=f"LLM ({label}) patch proposal constrained by path fence and frames.",
         falsifier=falsifier,
         measure=measure,
@@ -382,6 +432,8 @@ def llm_propose(
         backend=backend.name,
         stance="proceed",
         endpoint=ep_dict,
+        coalition=dict(coalition or {}),
+        impasse=dict(impasse or {}),
     )
 
 
@@ -400,11 +452,21 @@ def propose_action(
     tools: ToolRegistry | None = None,
     budget: Any = None,
     structured_tools: bool = True,
+    coalition: dict[str, Any] | None = None,
+    impasse: dict[str, Any] | None = None,
+    last_round: dict[str, Any] | None = None,
 ) -> ActionProposal:
-    """Propose an action. Default ``llm='auto'`` selects SLM/GPU/cloud from config."""
-    if llm is False or llm == "heuristic" or llm == "off":
-        prop = heuristic_propose(workspace, step, path_pack=path_pack, pack=pack)
+    """Propose an action. Dual-process: heuristic unless coalition empty / typed impasse / overridden."""
+    from codeevolve.graph.control import should_escalate_llm
+
+    escalate = should_escalate_llm(coalition, impasse, last_round)
+    use_heuristic = llm is False or llm == "heuristic" or llm == "off" or not escalate
+    if use_heuristic:
+        prop = heuristic_propose(workspace, step, path_pack=path_pack, pack=pack, coalition=coalition)
         prop.endpoint = {"provider": "heuristic", "kind": "heuristic", "model": "heuristic"}
+        prop.impasse = dict(impasse or {})
+        if not escalate and llm not in {False, "heuristic", "off"}:
+            prop.instructions.append("System-1 heuristic: coalition present, no typed impasse")
         return prop
     return llm_propose(
         workspace,
@@ -420,4 +482,6 @@ def propose_action(
         tools=tools,
         budget=budget,
         structured_tools=structured_tools,
+        coalition=coalition,
+        impasse=impasse,
     )

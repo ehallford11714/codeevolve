@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codeevolve"
-version = "0.24.0"
+version = "0.25.0"
 description = "Code evolution analysis with dynamical provenance, context graph (families, pivots, decision traces, traversal search), 3D phylogeny viz (semantic type_path divisions, intent, clades, parsimony), cognitive coding agent, MCP stdio server, deliberation schemas, and multi-suite eval."
 readme = "README.md"
 license = { text = "MIT" }

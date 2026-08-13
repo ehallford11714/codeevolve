@@ -62,7 +62,7 @@ Reload MCP / restart Cursor after install. Tools: `analyze_repo`, `provenance_*`
 4. **Improve toward an objective** (native cognitive agent):
 
    - MCP: `evolve_toward_objective` with `repo` + `objective`, `apply=false` first
-   - Stack: in-memory notes, RAG semantic chunks, morphemes, reflection, tooling (`grep`/`web_search`/…), compaction, kernel subagents
+   - Stack: in-memory notes, RAG semantic chunks, morphemes, reflection, tooling (`graph_search` sense organ / `grep`/`web_search`/…), compaction, kernel subagents
    - Spawn helpers: `spawn_kernel_subagents`, inspect via `agent_cognition_info`
    - CLI: `python -m codeevolve --repo . agent --objective reduce_debt`
    - Review `.codeevolve/agent/` (`cognition.json`, `subagents/`), then `--apply`
